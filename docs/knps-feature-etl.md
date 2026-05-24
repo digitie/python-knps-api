@@ -49,13 +49,15 @@
 | 국립공원 경계 | `01020101` `TOURISM_NATURAL_LANDSCAPE_MOUNTAIN_VALLEY_NATIONAL_PARK` | `area_kind="national_park"` | `park` |
 | 탐방로/추천코스 | `01020103` `TOURISM_NATURAL_LANDSCAPE_MOUNTAIN_VALLEY_FOREST_TRAIL` | `route_type="hiking_trail"` | `park` |
 | 탐방안내소 | `01060101` `TOURISM_INFORMATION_CENTER_PUBLIC` | `place_kind="visitor_center"` | `information` |
-| 위험지역 | category 없음 | `area_kind="hazard_zone"` | `danger` |
+| 위험지역 | category 없음 | `area_kind="hazard_zone"` | `barrier` |
 | 화장실 | `05060000` `CONVENIENCE_TOILET` | `place_kind="restroom_national_park"` | `toilet` |
 | 문화자원: 사찰 | `01070100` `TOURISM_HERITAGE_TEMPLE` | `place_kind="temple"` | `religious-buddhist` |
 | 문화자원: 유적 | `01070300` `TOURISM_HERITAGE_HISTORIC_SITE` | `place_kind="historic_site"` | `monument` |
 | 문화자원: 기타 | `01070000` `TOURISM_HERITAGE` | `place_kind="cultural_resource"` | `monument` |
 | 야영장 | `03060100` `LODGING_CAMPGROUND_AUTO` | `place_kind="campground"` | `campsite` |
-| 대피소 | `03080100` `LODGING_MOUNTAIN_SHELTER_KNPS` | `place_kind="mountain_shelter"` | `lodging` |
+| 대피소 | `03080100` `LODGING_MOUNTAIN_SHELTER_KNPS` | `place_kind="mountain_shelter"` | `shelter` |
+
+> downstream `python-krtour-map`의 maki dispatch (ADR-027, ADR-029)와 일치한다. 표준 Maki 아이콘 집합에 `danger`는 없고 위험지역에는 `barrier`(또는 `alert`)를 사용한다. 대피소는 `shelter`(Maki 표준)로 통일한다.
 
 ## 5. 핵심 함수
 
