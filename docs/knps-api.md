@@ -1,0 +1,60 @@
+# KNPS API/file dataset scope
+
+이 문서는 `python-knps-api`가 제공할 국립공원공단(KNPS) 공개 데이터 catalog와 public client 방향성을 기록한다.
+
+## Client API shape
+
+- public client는 `httpx`/`asyncio` 기반이다.
+- 생성 방식은 `KnpsClient(api_key=...)`, `KnpsClient.from_env()`, `async with`를 지원한다.
+- 지원 환경 변수는 `KNPS_SERVICE_KEY`, `DATA_GO_KR_SERVICE_KEY`다. KNPS 전용 값이 공통 data.go.kr 값보다 우선한다.
+- `auth`, `rate limit`, `exception`은 KNPS 전용 계층이다. 다른 provider의 예외를 import하지 않는다.
+- downstream인 `python-krtour-map`은 wrapper/adapter를 만들지 않고 이 라이브러리의 public client/catalog/model을 직접 사용한다.
+
+## 구현 상태
+
+| 영역 | 상태 | 비고 |
+|------|------|------|
+| catalog model | implemented | `ApiEndpoint`, `FileDataset`, `CatalogEntry` |
+| raw OpenAPI 호출 | implemented | data.go.kr JSON/XML envelope 정규화 |
+| file dataset catalog | implemented | 직접 다운로드 URL은 검증된 항목만 사용 |
+| SHP/GeoJSON parser | planned | `geo` extra에서 `pyshp`, `pyproj` 사용 예정 |
+| typed feature model | planned | 원본 provider model만 제공, feature 변환은 krtour-map ETL |
+
+## API endpoints
+
+| key | 공식/후보 이름 | data.go.kr | status | 설명 |
+|-----|----------------|------------|--------|------|
+| `knps_visitor_statistics` | 국립공원공단_국립공원 탐방객 통계 | `15107577` | needs_verification | 공개 검색에서 파일데이터 링크가 확인됨. API endpoint 제공 여부는 live 검증 필요 |
+| `knps_access_restrictions` | 국립공원공단_국립공원 입산통제정보 | TBD | planned | `notice_type=access_restriction` 후보 |
+| `knps_fire_alerts` | 국립공원공단_국립공원 산불경보정보 | TBD | planned | `notice_type=fire_alert` 후보 |
+
+## File datasets
+
+`python-krtour-map/docs/forest-feature-etl.md`의 KNPS §11을 seed catalog로 삼는다. data.go.kr 상세 ID는 live test에서 확정하며, 확정 전에는 `verification_status="needs_verification"`을 유지한다.
+
+| key | 공식 이름 | data.go.kr | format | geometry | feature |
+|-----|-----------|------------|--------|----------|---------|
+| `knps_park_boundaries` | 국립공원공단_국립공원 공원경계 공간데이터 | `15084538` | SHP/GeoJSON/CSV/ZIP | MultiPolygon | area |
+| `knps_trails` | 국립공원공단_국립공원 탐방로 공간데이터 | `15084540` | SHP/GeoJSON/CSV/ZIP | LineString | route |
+| `knps_visitor_centers` | 국립공원공단_국립공원 탐방안내소 공간데이터 | `15084541` | SHP/GeoJSON/CSV/ZIP | Point | place |
+| `knps_hazard_zones` | 국립공원공단_국립공원 위험지역 공간데이터 | `15084542` | SHP/GeoJSON/CSV/ZIP | Polygon | area |
+| `knps_weather_stations` | 국립공원공단_국립공원 기상관측시설 현황 | `15084543` | CSV/SHP/GeoJSON/ZIP | Point | weather |
+| `knps_restrooms` | 국립공원공단_국립공원 화장실 공간데이터 | `15084544` | SHP/GeoJSON/CSV/ZIP | Point | place |
+| `knps_cultural_resources` | 국립공원공단_국립공원 문화자원 공간데이터 | `15084545` | SHP/GeoJSON/CSV/ZIP | Point | place |
+| `knps_campgrounds` | 국립공원공단_국립공원 야영장 공간데이터 | TBD | CSV/SHP/GeoJSON/ZIP | Point | place |
+| `knps_shelters` | 국립공원공단_국립공원 대피소 공간데이터 | TBD | CSV/SHP/GeoJSON/ZIP | Point | place |
+| `knps_recommended_courses` | 국립공원공단_국립공원 추천 탐방코스 | TBD | CSV/GeoJSON/SHP/ZIP | LineString | route |
+| `knps_park_photos` | 국립공원공단_국립공원 명소 사진/VR | TBD | CSV/JPG/URL | n/a | media |
+| `knps_visitor_statistics` | 국립공원공단_국립공원 탐방객 통계 | `15107577` | CSV/XLSX | n/a | timeseries |
+
+## 공간데이터 처리 원칙
+
+- 원본 좌표계는 EPSG:5179 또는 5186일 수 있다. 라이브러리 parser는 WGS84 좌표와 원본 geometry metadata를 함께 보존한다.
+- SHP 한글 인코딩은 CP949 가능성을 기본 고려한다.
+- ZIP 내부에 CSV와 shapefile이 함께 있으면 record 식별자는 shapefile attribute를 우선하고, CSV는 부가 필드 보강에 사용한다.
+- geometry가 없는 통계/media dataset은 feature 본문에 섞지 않고 별도 timeseries/source link로 전달한다.
+
+## 제외/보류
+
+- 생태 연구용 식생도, 멸종위기종 서식지는 v1 feature provider 범위 밖이다. 보안/마스킹 정책이 먼저 필요하다.
+- 예약 결제, 실시간 예약 가능 여부는 KNPS 예약 시스템 정책과 robots/login 흐름 확인 전까지 제외한다.
