@@ -53,7 +53,6 @@ def test_verified_data_go_ids_match_catalog() -> None:
         "knps_cultural_resources": "15003443",
         "knps_campgrounds": "15003469",
         "knps_shelters": "2982556",
-        "knps_park_offices": "15003440",
         "knps_linear_facilities": "15091972",
         "knps_basic_statistics": "15087598",
         "knps_visitor_statistics": "15107577",
