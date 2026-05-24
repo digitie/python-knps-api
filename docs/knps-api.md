@@ -15,18 +15,14 @@
 | 영역 | 상태 | 비고 |
 |------|------|------|
 | catalog model | implemented | `ApiEndpoint`, `FileDataset`, `CatalogEntry` |
-| raw OpenAPI 호출 | implemented | data.go.kr JSON/XML envelope 정규화 |
+| raw OpenAPI 호출 | implemented | KNPS용으로 검증된 endpoint가 생길 때 사용할 transport. 현재 catalog는 비어 있음 |
 | file dataset catalog | implemented | 직접 다운로드 URL은 검증된 항목만 사용 |
 | SHP/GeoJSON parser | planned | `geo` extra에서 `pyshp`, `pyproj` 사용 예정 |
 | typed feature model | planned | 원본 provider model만 제공, feature 변환은 krtour-map ETL |
 
 ## API endpoints
 
-| key | 공식/후보 이름 | data.go.kr | status | 설명 |
-|-----|----------------|------------|--------|------|
-| `knps_visitor_statistics` | 국립공원공단_국립공원 탐방객 통계 | `15107577` | needs_verification | 공개 검색에서 파일데이터 링크가 확인됨. API endpoint 제공 여부는 live 검증 필요 |
-| `knps_access_restrictions` | 국립공원공단_국립공원 입산통제정보 | TBD | planned | `notice_type=access_restriction` 후보 |
-| `knps_fire_alerts` | 국립공원공단_국립공원 산불경보정보 | TBD | planned | `notice_type=fire_alert` 후보 |
+현재 `API_ENDPOINTS`는 비어 있다. data.go.kr의 KNPS 공개 catalog는 파일데이터 중심이며, `apis.data.go.kr/B551011/...` prefix는 한국관광공사(KTO) 서비스 코드라 KNPS endpoint로 사용하지 않는다. 검증된 KNPS OpenAPI가 확인되기 전까지 추정 URL은 catalog에 올리지 않는다.
 
 ## File datasets
 
@@ -34,18 +30,21 @@
 
 | key | 공식 이름 | data.go.kr | format | geometry | feature |
 |-----|-----------|------------|--------|----------|---------|
-| `knps_park_boundaries` | 국립공원공단_국립공원 공원경계 공간데이터 | `15084538` | SHP/GeoJSON/CSV/ZIP | MultiPolygon | area |
-| `knps_trails` | 국립공원공단_국립공원 탐방로 공간데이터 | `15084540` | SHP/GeoJSON/CSV/ZIP | LineString | route |
-| `knps_visitor_centers` | 국립공원공단_국립공원 탐방안내소 공간데이터 | `15084541` | SHP/GeoJSON/CSV/ZIP | Point | place |
-| `knps_hazard_zones` | 국립공원공단_국립공원 위험지역 공간데이터 | `15084542` | SHP/GeoJSON/CSV/ZIP | Polygon | area |
-| `knps_weather_stations` | 국립공원공단_국립공원 기상관측시설 현황 | `15084543` | CSV/SHP/GeoJSON/ZIP | Point | weather |
-| `knps_restrooms` | 국립공원공단_국립공원 화장실 공간데이터 | `15084544` | SHP/GeoJSON/CSV/ZIP | Point | place |
-| `knps_cultural_resources` | 국립공원공단_국립공원 문화자원 공간데이터 | `15084545` | SHP/GeoJSON/CSV/ZIP | Point | place |
-| `knps_campgrounds` | 국립공원공단_국립공원 야영장 공간데이터 | TBD | CSV/SHP/GeoJSON/ZIP | Point | place |
-| `knps_shelters` | 국립공원공단_국립공원 대피소 공간데이터 | TBD | CSV/SHP/GeoJSON/ZIP | Point | place |
-| `knps_recommended_courses` | 국립공원공단_국립공원 추천 탐방코스 | TBD | CSV/GeoJSON/SHP/ZIP | LineString | route |
-| `knps_park_photos` | 국립공원공단_국립공원 명소 사진/VR | TBD | CSV/JPG/URL | n/a | media |
+| `knps_park_boundaries` | 국립공원공단_국립공원 공원경계_20231231 | `15017313` | SHP | MultiPolygon | area |
+| `knps_trails` | 국립공원공단_국립공원 탐방로 공간데이터_20170928 | `15003467` | CSV | LineString | route |
+| `knps_visitor_centers` | 국립공원공단_국립공원 탐방안내소 공간데이터_20141219 | `15003445` | CSV | Point | place |
+| `knps_hazard_zones` | 국립공원공단_국립공원 위험지역 공간데이터_20180816 | `15003441` | CSV | Polygon | area |
+| `knps_weather_stations` | 국립공원공단_통합방재시스템_기상관측장비_20210928 | `15090557` | CSV | Point | weather |
+| `knps_restrooms` | 국립공원공단_국립공원 화장실 공간데이터_20141219 | `15003468` | CSV | Point | place |
+| `knps_cultural_resources` | 국립공원공단_국립공원 문화자원 공간데이터_20141219 | `15003443` | CSV | Point | place |
+| `knps_campgrounds` | 국립공원공단_국립공원 야영장 공간데이터_20141219 | `15003469` | CSV | Point | place |
+| `knps_shelters` | 국립공원공단_국립공원 대피소_20131102 | `2982556` | CSV | Point | place |
+| `knps_park_offices` | 국립공원 공원사무소 공간데이터_20180813 | `15003440` | CSV | Point | place |
+| `knps_linear_facilities` | 국립공원공단_국립공원 선형시설_20181231 | `15091972` | CSV | LineString | route |
+| `knps_basic_statistics` | 국립공원공단_국립공원기본통계2020 | `15087598` | CSV | n/a | timeseries |
 | `knps_visitor_statistics` | 국립공원공단_국립공원 탐방객 통계 | `15107577` | CSV/XLSX | n/a | timeseries |
+| `knps_protected_areas` | 국립공원공단_한국보호지역 데이터_20161231 | `15127921` | CSV | Polygon | area |
+| `knps_lod_table_catalog` | 국립공원공단_LOD 공간데이터 테이블 목록 | `15118945` | CSV | n/a | metadata |
 
 ## 공간데이터 처리 원칙
 

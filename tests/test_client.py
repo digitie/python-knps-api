@@ -3,6 +3,7 @@ from typing import Any
 import pytest
 
 from knps import KnpsClient
+from knps._http import KnpsHttp
 
 
 class FakeResponse:
@@ -44,14 +45,30 @@ class FakeSession:
 
 
 @pytest.mark.asyncio
-async def test_raw_endpoint_redacts_context_key() -> None:
+async def test_raw_endpoint_requires_verified_catalog_key() -> None:
     session = FakeSession()
     client = KnpsClient(api_key="secret", session=session, max_rps=1000)
-    page = await client.raw_endpoint("knps_visitor_statistics", num_of_rows=1)
+    with pytest.raises(KeyError):
+        await client.raw_endpoint("knps_visitor_statistics", num_of_rows=1)
     await client.aclose()
+    assert session.params is None
 
-    assert page.items == ({"name": "A"},)
-    assert page.context.request_params["serviceKey"] == "***"
+
+@pytest.mark.asyncio
+async def test_http_redacts_context_key() -> None:
+    session = FakeSession()
+    http = KnpsHttp("secret", session=session, max_rps=1000)
+    payload = await http.get(
+        "https://example.test/knps",
+        {"pageNo": 1, "numOfRows": 1},
+        provider="data.go.kr",
+        endpoint="verified_fixture",
+        response_format="json",
+    )
+    await http.aclose()
+
+    assert payload.items == [{"name": "A"}]
+    assert payload.context.request_params["serviceKey"] == "***"
     assert session.params is not None
     assert session.params["serviceKey"] == "secret"
     assert session.closed is False

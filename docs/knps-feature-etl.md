@@ -26,11 +26,12 @@
 | `knps_cultural_resources` | `client.files.dataset("knps_cultural_resources")` | Point → `place`, 문화자원 subtype 분기 |
 | `knps_campgrounds` | `client.files.dataset("knps_campgrounds")` | Point/Polygon → `place` 또는 `area`, `place_kind="campground"` |
 | `knps_shelters` | `client.files.dataset("knps_shelters")` | Point → `place`, `place_kind="mountain_shelter"` |
-| `knps_access_restrictions` | `client.raw_endpoint("knps_access_restrictions")` | notice, `notice_type="access_restriction"` |
-| `knps_fire_alerts` | `client.raw_endpoint("knps_fire_alerts")` | notice, `notice_type="fire_alert"` |
-| `knps_recommended_courses` | `client.files.dataset("knps_recommended_courses")` | LineString → `route`, difficulty 직접 채움 |
-| `knps_park_photos` | `client.files.dataset("knps_park_photos")` | feature_files/source_links media |
+| `knps_park_offices` | `client.files.dataset("knps_park_offices")` | Point → `place`, `place_kind="park_office"` |
+| `knps_linear_facilities` | `client.files.dataset("knps_linear_facilities")` | LineString → `route` 또는 route-linked facility |
 | `knps_visitor_statistics` | `client.files.dataset("knps_visitor_statistics")` | feature 본문 X, monthly timeseries |
+| `knps_basic_statistics` | `client.files.dataset("knps_basic_statistics")` | feature 본문 X, yearly statistics |
+| `knps_protected_areas` | `client.files.dataset("knps_protected_areas")` | Polygon/MultiPolygon → `area`, 보호지역 layer |
+| `knps_lod_table_catalog` | `client.files.dataset("knps_lod_table_catalog")` | feature 본문 X, metadata catalog |
 
 ## 3. 매핑 룰
 
@@ -41,6 +42,7 @@
 - 화장실, 탐방안내소, 야영장, 대피소는 `place`다.
 - 문화자원은 `RESOURCE_TYPE`에 따라 사찰/유적/기타 문화자원으로 category를 분기한다.
 - 통계와 media는 feature 본문에 섞지 않는다. 통계는 별도 timeseries, 사진/VR은 `feature_files` 또는 `source_links(role="media")`로 연결한다.
+- KNPS data.go.kr OpenAPI는 현재 catalog에 올리지 않는다. `access_restriction`, `fire_alert` 같은 notice 후보는 검증된 file/API source가 생긴 뒤 별도 dataset_key로 추가한다.
 
 ## 4. category
 
@@ -91,8 +93,8 @@ async def access_restrictions_to_notices(items, *, fetched_at):
 | `feature_place_knps_cultural_resources` | `knps_cultural_resources` | `0 3 1 1 *` | `features_place` | `knps_api: 1` |
 | `feature_place_knps_campgrounds` | `knps_campgrounds` | `0 3 1 */3 *` | `features_place` | `knps_api: 1` |
 | `feature_place_knps_shelters` | `knps_shelters` | `0 3 1 1 *` | `features_place` | `knps_api: 1` |
-| `notice_knps_access_restrictions` | `knps_access_restrictions` | `0 5 * * *` | `features_notice` | `knps_api: 1` |
-| `notice_knps_fire_alerts` | `knps_fire_alerts` | `*/30 * * * *` | `features_notice` | `knps_api: 1` |
+| `feature_place_knps_park_offices` | `knps_park_offices` | `0 3 1 1 *` | `features_place` | `knps_api: 1` |
+| `feature_route_knps_linear_facilities` | `knps_linear_facilities` | `0 3 1 1 *` | `features_route` | `knps_api: 1` |
 
 ## 7. 검증
 
