@@ -45,7 +45,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-## API 예시
+## Catalog 예시
 
 ```python
 import asyncio
@@ -55,19 +55,14 @@ from knps import KnpsClient
 
 async def main() -> None:
     async with KnpsClient(api_key="YOUR_DATA_GO_KR_KEY") as client:
-        page = await client.raw_endpoint(
-            "knps_visitor_statistics",
-            {"baseYm": "202501"},
-            num_of_rows=10,
-        )
-        print(page.total_count, page.items[0] if page.items else None)
-        print(page.context.request_params)  # service key는 제거된다.
+        for dataset in client.file_datasets("spatial"):
+            print(dataset.key, dataset.data_go_id, dataset.detail_url)
 
 
 asyncio.run(main())
 ```
 
-Paged API 응답은 raw item mapping을 담은 `Page`와 안전한 call context를 반환한다. KNPS는 파일 기반 공간데이터 비중이 높으므로 v1 public surface는 catalog와 raw transport를 먼저 안정화하고, SHP/GeoJSON 파서는 `docs/knps-feature-etl.md`의 dataset별 변환 규칙에 맞춰 확장한다.
+KNPS는 data.go.kr에서 확인된 provider catalog가 파일데이터 중심이다. 검증되지 않은 OpenAPI 추정 URL은 catalog에 올리지 않는다. SHP/CSV parser는 `docs/knps-feature-etl.md`의 dataset별 변환 규칙에 맞춰 확장한다.
 
 ## File dataset
 
@@ -77,6 +72,15 @@ File-data namespace는 curated catalog를 제공한다. data.go.kr 상세 페이
 async with KnpsClient.from_env() as client:
     for dataset in client.files.datasets():
         print(dataset.key, dataset.data_go_id, dataset.title, dataset.verification_status)
+```
+
+## Debug UI
+
+Streamlit 기반 디버그 UI는 KNPS API endpoint와 file dataset catalog를 빠르게 확인하고, raw endpoint 호출 결과를 Response, Table, Debug Trace, Catalog, Fixture 탭으로 확인한다.
+
+```bash
+pip install -e ".[debug-ui]"
+streamlit run debug_ui/app.py
 ```
 
 ## Scope
