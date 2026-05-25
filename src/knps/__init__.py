@@ -14,14 +14,18 @@ from .exceptions import (
     KnpsRequestError,
     KnpsServerError,
 )
-from .models import CatalogEntry, FileDataset
+from .models import CatalogEntry, CsvPreview, CsvPreviewRow, FileArtifact, FileDataset, FileMember
 
 PROVIDER_NAME = "python-knps-api"
 
 __all__ = [
     "PROVIDER_NAME",
     "CatalogEntry",
+    "CsvPreview",
+    "CsvPreviewRow",
+    "FileArtifact",
     "FileDataset",
+    "FileMember",
     "KnpsApiError",
     "KnpsAuthError",
     "KnpsClient",

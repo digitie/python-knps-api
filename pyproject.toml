@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "python-knps-api"
 version = "0.1.0"
-description = "Unofficial Python client for Korea National Park Service public APIs and file datasets."
+description = "Unofficial Python client for Korea National Park Service public file datasets."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0-or-later" }
@@ -71,8 +71,8 @@ files = ["src", "debug_ui"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-ra"
+addopts = "-ra -m 'not live'"
 asyncio_mode = "auto"
 markers = [
-  "live: tests that call real KNPS/data.go.kr servers and require a service key",
+  "live: tests that call real KNPS/data.go.kr file dataset servers",
 ]

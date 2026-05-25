@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Protocol, cast
 
 import httpx
@@ -48,23 +49,14 @@ class KnpsHttp:
 
     def __init__(
         self,
-        api_key: str,
         *,
         timeout: float = 10.0,
         session: AsyncSessionLike | None = None,
-        service_key_param: str = "serviceKey",
         max_rps: float | None = 5.0,
     ) -> None:
-        api_key = "".join(str(api_key).split())
-        if not api_key:
-            raise KnpsAuthError("api_key is required", failure_kind="auth")
-        if not service_key_param:
-            raise ValueError("service_key_param must not be empty")
-        self.api_key = api_key
         self.timeout = timeout
         self.session = session or _new_session(timeout)
         self._owns_session = session is None
-        self.service_key_param = service_key_param
         self._rate_limiter = AsyncTokenBucket(max_rps=max_rps) if max_rps is not None else None
 
     async def aclose(self) -> None:
@@ -83,24 +75,37 @@ class KnpsHttp:
     ) -> bytes:
         if self._rate_limiter is not None:
             await self._rate_limiter.acquire()
-        try:
-            response = await self.session.get(url, timeout=self.timeout)
-        except httpx.HTTPError as exc:
-            message = _redact_secret(str(exc), self.api_key)
-            raise KnpsRequestError(
-                f"request failed: {message}",
-                provider=provider,
-                endpoint=endpoint or url,
-                failure_kind="network",
-            ) from exc
+        response = await self._get_with_retry(url, provider=provider, endpoint=endpoint or url)
         _raise_for_status(
             response,
             provider=provider,
             endpoint=endpoint or url,
-            api_key=self.api_key,
         )
         data = getattr(response, "content", b"")
         return data if max_bytes is None else data[:max_bytes]
+
+    async def _get_with_retry(
+        self,
+        url: str,
+        *,
+        provider: str,
+        endpoint: str,
+    ) -> ResponseLike:
+        last_error: httpx.HTTPError | None = None
+        for attempt in range(3):
+            try:
+                return await self.session.get(url, timeout=self.timeout)
+            except httpx.HTTPError as exc:
+                last_error = exc
+                if attempt == 2:
+                    break
+                await asyncio.sleep(0.25 * (attempt + 1))
+        raise KnpsRequestError(
+            f"request failed: {last_error}",
+            provider=provider,
+            endpoint=endpoint,
+            failure_kind="network",
+        ) from last_error
 
 
 def _raise_for_status(
@@ -108,12 +113,11 @@ def _raise_for_status(
     *,
     provider: str,
     endpoint: str,
-    api_key: str,
 ) -> None:
     status = response.status_code
     if status < 400:
         return
-    message = _redact_secret(response.text[:300], api_key)
+    message = response.text[:300]
     error_cls: type[KnpsRequestError | KnpsAuthError | KnpsRateLimitError | KnpsServerError]
     if status in {401, 403}:
         error_cls = KnpsAuthError
@@ -134,9 +138,3 @@ def _raise_for_status(
         status_code=status,
         failure_kind=failure_kind,
     )
-
-
-def _redact_secret(text: str, secret: str) -> str:
-    if not secret:
-        return text
-    return text.replace(secret, "***")

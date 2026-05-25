@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Protocol, cast
 
+from .artifacts import read_file_artifact
 from .catalog import file_dataset, file_datasets
 from .exceptions import KnpsRequestError
-from .models import FileDataset
+from .models import FileArtifact, FileDataset
 
 
 class _DownloadHttp(Protocol):
@@ -58,3 +59,29 @@ class FileDataNamespace:
             provider=dataset.provider,
             endpoint=dataset.key,
         )
+
+    def inspect_bytes(
+        self,
+        key: str,
+        data: bytes,
+        *,
+        preview_rows: int = 5,
+    ) -> FileArtifact:
+        """다운로드 bytes를 파일 구조/CSV preview DTO로 변환한다."""
+
+        return read_file_artifact(
+            file_dataset(key),
+            data,
+            preview_rows=preview_rows,
+        )
+
+    async def download_artifact(
+        self,
+        key: str,
+        *,
+        preview_rows: int = 5,
+    ) -> FileArtifact:
+        """파일을 다운로드한 뒤 Pydantic DTO로 읽는다."""
+
+        data = await self.download(key)
+        return self.inspect_bytes(key, data, preview_rows=preview_rows)

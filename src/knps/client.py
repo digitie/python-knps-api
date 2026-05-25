@@ -18,24 +18,18 @@ class KnpsClient:
     def __init__(
         self,
         *,
-        api_key: str | None = None,
         timeout: float | str | None = None,
         max_rps: float | str | None = None,
         session: AsyncSessionLike | None = None,
-        service_key_param: str = "serviceKey",
     ) -> None:
         self.config = KnpsConfig.from_env(
-            api_key=api_key,
             timeout=timeout,
             max_rps=max_rps,
         )
-        self.api_key = self.config.api_key
         self.timeout = self.config.timeout
         self._http = KnpsHttp(
-            self.api_key,
             timeout=self.timeout,
             session=session,
-            service_key_param=service_key_param,
             max_rps=self.config.max_rps,
         )
         self.files = FileDataNamespace(self)

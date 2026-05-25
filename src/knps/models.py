@@ -19,6 +19,7 @@ Category: TypeAlias = Literal[
 Provider: TypeAlias = Literal["data.go.kr", "knps.or.kr"]
 CatalogKind: TypeAlias = Literal["file_dataset"]
 VerificationStatus: TypeAlias = Literal["verified", "needs_verification", "planned"]
+FileArtifactKind: TypeAlias = Literal["zip", "csv", "binary"]
 
 
 class KnpsModel(BaseModel):
@@ -62,3 +63,37 @@ class CatalogEntry(KnpsModel):
     url: str | None = None
     formats: tuple[str, ...] = ()
     verification_status: VerificationStatus = "needs_verification"
+
+
+class FileMember(KnpsModel):
+    """다운로드 파일 내부 member 메타데이터."""
+
+    name: str
+    size_bytes: int
+    compressed_size_bytes: int | None = None
+
+
+class CsvPreviewRow(KnpsModel):
+    """CSV preview row DTO."""
+
+    values: dict[str, str | None]
+
+
+class CsvPreview(KnpsModel):
+    """CSV-like file preview DTO."""
+
+    member_name: str | None = None
+    encoding: str
+    headers: tuple[str, ...]
+    rows: tuple[CsvPreviewRow, ...]
+
+
+class FileArtifact(KnpsModel):
+    """다운로드 bytes를 Pydantic DTO로 읽은 결과."""
+
+    dataset_key: str
+    data_go_id: str
+    kind: FileArtifactKind
+    size_bytes: int
+    members: tuple[FileMember, ...] = ()
+    csv_previews: tuple[CsvPreview, ...] = ()
