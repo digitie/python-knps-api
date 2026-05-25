@@ -1,4 +1,4 @@
-# KNPS API/file dataset scope
+# KNPS file dataset scope
 
 이 문서는 `python-knps-api`가 제공할 국립공원공단(KNPS) 공개 데이터 catalog와 public client 방향성을 기록한다.
 
@@ -14,15 +14,14 @@
 
 | 영역 | 상태 | 비고 |
 |------|------|------|
-| catalog model | implemented | `ApiEndpoint`, `FileDataset`, `CatalogEntry` |
-| raw OpenAPI 호출 | implemented | KNPS용으로 검증된 endpoint가 생길 때 사용할 transport. 현재 catalog는 비어 있음 |
+| catalog model | implemented | `FileDataset`, `CatalogEntry` |
 | file dataset catalog | implemented | 직접 다운로드 URL은 검증된 항목만 사용 |
 | SHP/GeoJSON parser | planned | `geo` extra에서 `pyshp`, `pyproj` 사용 예정 |
 | typed feature model | planned | 원본 provider model만 제공, feature 변환은 krtour-map ETL |
 
-## API endpoints
+## OpenAPI
 
-현재 `API_ENDPOINTS`는 비어 있다. data.go.kr의 KNPS 공개 catalog는 파일데이터 중심이며, `apis.data.go.kr/B551011/...` prefix는 한국관광공사(KTO) 서비스 코드라 KNPS endpoint로 사용하지 않는다. 검증된 KNPS OpenAPI가 확인되기 전까지 추정 URL은 catalog에 올리지 않는다.
+KNPS는 현재 이 라이브러리에서 OpenAPI catalog를 제공하지 않는다. data.go.kr의 KNPS 공개 catalog는 파일데이터 중심이며, `apis.data.go.kr/B551011/...` prefix는 한국관광공사(KTO) 서비스 코드라 KNPS endpoint로 사용하지 않는다. 추정 URL은 catalog와 debug UI에 올리지 않는다.
 
 ## File datasets
 

@@ -42,7 +42,7 @@
 - 화장실, 탐방안내소, 야영장, 대피소는 `place`다.
 - 문화자원은 `RESOURCE_TYPE`에 따라 사찰/유적/기타 문화자원으로 category를 분기한다.
 - 통계와 media는 feature 본문에 섞지 않는다. 통계는 별도 timeseries, 사진/VR은 `feature_files` 또는 `source_links(role="media")`로 연결한다.
-- KNPS data.go.kr OpenAPI는 현재 catalog에 올리지 않는다. `access_restriction`, `fire_alert` 같은 notice 후보는 검증된 file/API source가 생긴 뒤 별도 dataset_key로 추가한다.
+- KNPS data.go.kr OpenAPI는 현재 catalog에 올리지 않는다. `access_restriction`, `fire_alert` 같은 notice 후보는 검증된 file source가 생긴 뒤 별도 dataset_key로 추가한다.
 
 ## 4. category
 
