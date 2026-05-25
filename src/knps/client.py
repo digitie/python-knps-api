@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from types import TracebackType
 from typing import Any
 
 from ._http import AsyncSessionLike, KnpsHttp
-from .catalog import api_endpoint, api_endpoints, catalog_entries
+from .catalog import catalog_entries
 from .config import KnpsConfig
 from .files import FileDataNamespace
-from .models import ApiEndpoint, CatalogEntry, FileDataset, Page, RawRecord
+from .models import CatalogEntry, FileDataset
 
 
 class KnpsClient:
@@ -69,11 +68,6 @@ class KnpsClient:
         await self._http.aclose()
         self.closed = True
 
-    def endpoints(self, category: str | None = None) -> tuple[ApiEndpoint, ...]:
-        """정리된 API endpoint 메타데이터를 반환한다."""
-
-        return api_endpoints(category)
-
     def file_datasets(self, category: str | None = None) -> tuple[FileDataset, ...]:
         """정리된 파일데이터 메타데이터를 반환한다."""
 
@@ -83,47 +77,3 @@ class KnpsClient:
         """디버그 UI와 선택 목록에서 쓰는 human-readable 카탈로그를 반환한다."""
 
         return catalog_entries(category)
-
-    async def raw_endpoint(
-        self,
-        endpoint_key: str,
-        params: Mapping[str, Any] | None = None,
-        *,
-        page_no: int = 1,
-        num_of_rows: int = 10,
-        response_format: str | None = None,
-    ) -> Page[RawRecord]:
-        """정리된 endpoint key로 호출하고 raw item mapping을 반환한다."""
-
-        endpoint = api_endpoint(endpoint_key)
-        fmt = response_format or endpoint.response_format or "json"
-        payload = await self._http.get(
-            endpoint.url,
-            _page_params(params, page_no=page_no, num_of_rows=num_of_rows),
-            provider=endpoint.provider,
-            endpoint=endpoint.key,
-            response_format=fmt,
-            service_key_param=endpoint.service_key_param,
-            response_type_param=endpoint.response_type_param,
-        )
-        return Page[RawRecord](
-            items=tuple(payload.items),
-            total_count=payload.total_count or len(payload.items),
-            page_no=payload.page_no or page_no,
-            num_of_rows=payload.num_of_rows or num_of_rows,
-            raw=payload.raw,
-            header=payload.header,
-            context=payload.context,
-        )
-
-
-def _page_params(
-    params: Mapping[str, Any] | None,
-    *,
-    page_no: int,
-    num_of_rows: int,
-) -> dict[str, Any]:
-    query = dict(params or {})
-    query.setdefault("pageNo", page_no)
-    query.setdefault("numOfRows", num_of_rows)
-    return query

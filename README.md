@@ -1,6 +1,6 @@
 # python-knps-api
 
-국립공원공단(KNPS) 공개 API와 파일데이터를 여행, 탐방, 안전, 기상 use case 중심으로 다루는 비공식 async Python client다.
+국립공원공단(KNPS) 공개 파일데이터를 여행, 탐방, 안전, 기상 use case 중심으로 다루는 비공식 async Python client다.
 
 이 package는 `python-mois-api`, `python-krheritage-api`, `python-khoa-api`, `python-krforest-api`와 같은 방향성을 따른다. 기관별 provider 라이브러리를 분리하고, `python-krtour-map`은 이 public client와 typed model/catalog를 직접 사용한다. 인증, rate limit, 예외 계층은 KNPS 전용으로 독립시킨다.
 
@@ -35,9 +35,6 @@ from knps import KnpsClient
 
 async def main() -> None:
     async with KnpsClient.from_env() as client:
-        for endpoint in client.endpoints():
-            print(endpoint.key, endpoint.title)
-
         for dataset in client.files.datasets("spatial"):
             print(dataset.key, dataset.title, dataset.formats)
 
@@ -62,7 +59,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-KNPS는 data.go.kr에서 확인된 provider catalog가 파일데이터 중심이다. 검증되지 않은 OpenAPI 추정 URL은 catalog에 올리지 않는다. SHP/CSV parser는 `docs/knps-feature-etl.md`의 dataset별 변환 규칙에 맞춰 확장한다.
+KNPS는 data.go.kr에서 확인된 provider catalog가 파일데이터 중심이며, 현재 이 라이브러리의 OpenAPI catalog는 제공하지 않는다. SHP/CSV parser는 `docs/knps-feature-etl.md`의 dataset별 변환 규칙에 맞춰 확장한다.
 
 ## File dataset
 
@@ -76,7 +73,7 @@ async with KnpsClient.from_env() as client:
 
 ## Debug UI
 
-Streamlit 기반 디버그 UI는 KNPS API endpoint와 file dataset catalog를 빠르게 확인하고, raw endpoint 호출 결과를 Response, Table, Debug Trace, Catalog, Fixture 탭으로 확인한다.
+Streamlit 기반 디버그 UI는 KNPS file dataset catalog를 빠르게 확인하고, Metadata, Catalog, Fixture 탭으로 검토할 수 있다.
 
 ```bash
 pip install -e ".[debug-ui]"
@@ -88,7 +85,7 @@ streamlit run debug_ui/app.py
 v1 scope는 `python-krtour-map/docs/forest-feature-etl.md`의 KNPS 통합 계획을 라이브러리로 분리한 것이다.
 
 - 국립공원 경계, 탐방로, 탐방안내소, 위험지역, 기상관측시설, 화장실, 문화자원
-- 야영장, 대피소, 입산통제, 산불경보, 추천 탐방코스, 사진/VR, 탐방객 통계
+- 야영장, 대피소, 선형시설, 보호지역, 탐방객 통계
 - 파일데이터는 원본 catalog와 bytes download primitive를 제공하고, feature 변환은 downstream ETL에서 수행한다.
 
 ## 문서 지도

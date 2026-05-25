@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .catalog import api_endpoint, api_endpoints, catalog_entries, file_dataset, file_datasets
+from .catalog import catalog_entries, file_dataset, file_datasets
 from .client import KnpsClient
 from .config import KnpsConfig
 from .exceptions import (
@@ -14,13 +14,12 @@ from .exceptions import (
     KnpsRequestError,
     KnpsServerError,
 )
-from .models import ApiEndpoint, CatalogEntry, FileDataset, Page
+from .models import CatalogEntry, FileDataset
 
 PROVIDER_NAME = "python-knps-api"
 
 __all__ = [
     "PROVIDER_NAME",
-    "ApiEndpoint",
     "CatalogEntry",
     "FileDataset",
     "KnpsApiError",
@@ -32,9 +31,6 @@ __all__ = [
     "KnpsRateLimitError",
     "KnpsRequestError",
     "KnpsServerError",
-    "Page",
-    "api_endpoint",
-    "api_endpoints",
     "catalog_entries",
     "file_dataset",
     "file_datasets",

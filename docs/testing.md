@@ -18,7 +18,6 @@ pytest -m live
 Live test는 다음을 검증한다.
 
 - data.go.kr detail URL reachability
-- 활용신청이 필요한 API의 auth failure 분류
 - 직접 다운로드 URL이 확인된 file dataset의 bytes download
 - 공간데이터 ZIP parser 도입 후 geometry type과 좌표계 변환
 

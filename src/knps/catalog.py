@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from .models import ApiEndpoint, CatalogEntry, Category, FileDataset
+from .models import CatalogEntry, Category, FileDataset
 
 DATA_GO_BASE = "https://www.data.go.kr/data"
-
-
-API_ENDPOINTS: tuple[ApiEndpoint, ...] = ()
 
 
 FILE_DATASETS: tuple[FileDataset, ...] = (
@@ -193,23 +190,6 @@ FILE_DATASETS: tuple[FileDataset, ...] = (
 )
 
 
-def api_endpoints(category: str | None = None) -> tuple[ApiEndpoint, ...]:
-    """정리된 API endpoint 목록을 반환한다."""
-
-    if category is None:
-        return API_ENDPOINTS
-    return tuple(endpoint for endpoint in API_ENDPOINTS if category in endpoint.categories)
-
-
-def api_endpoint(key: str) -> ApiEndpoint:
-    """endpoint key로 API endpoint를 찾는다."""
-
-    for endpoint in API_ENDPOINTS:
-        if endpoint.key == key:
-            return endpoint
-    raise KeyError(f"unknown KNPS API endpoint: {key}")
-
-
 def file_datasets(category: str | None = None) -> tuple[FileDataset, ...]:
     """정리된 파일데이터 목록을 반환한다."""
 
@@ -228,30 +208,9 @@ def file_dataset(key: str) -> FileDataset:
 
 
 def catalog_entries(category: str | None = None) -> tuple[CatalogEntry, ...]:
-    """API와 파일데이터를 합친 human-readable catalog를 반환한다."""
+    """파일데이터 human-readable catalog를 반환한다."""
 
     entries: list[CatalogEntry] = []
-    for endpoint in api_endpoints(category):
-        entries.append(
-            CatalogEntry(
-                kind="api",
-                key=endpoint.key,
-                display_name=f"[API] {endpoint.title}",
-                dataset_id=endpoint.data_go_id,
-                dataset_name=endpoint.title,
-                categories=endpoint.categories,
-                provider=endpoint.provider,
-                description=endpoint.description,
-                detail_url=endpoint.detail_url,
-                service=endpoint.service,
-                operation=endpoint.operation,
-                url=endpoint.url,
-                service_key_param=endpoint.service_key_param,
-                response_format=endpoint.response_format,
-                response_type_param=endpoint.response_type_param,
-                verification_status=endpoint.verification_status,
-            )
-        )
     for dataset in file_datasets(category):
         entries.append(
             CatalogEntry(

@@ -1,7 +1,5 @@
-import pytest
-
 from knps import PROVIDER_NAME
-from knps.catalog import api_endpoint, api_endpoints, catalog_entries, file_dataset, file_datasets
+from knps.catalog import catalog_entries, file_dataset, file_datasets
 
 
 def test_provider_name() -> None:
@@ -34,12 +32,6 @@ def test_catalog_entries_include_only_verified_file_datasets() -> None:
     assert {entry.kind for entry in entries} == {"file_dataset"}
     assert all(entry.provider for entry in entries)
     assert all(entry.verification_status == "verified" for entry in entries)
-
-
-def test_api_endpoints_are_empty_until_verified() -> None:
-    assert api_endpoints() == ()
-    with pytest.raises(KeyError):
-        api_endpoint("knps_visitor_statistics")
 
 
 def test_verified_data_go_ids_match_catalog() -> None:

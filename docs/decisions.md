@@ -17,7 +17,7 @@ Status: accepted
 
 Status: accepted
 
-KNPS는 OpenAPI보다 파일 기반 공간데이터 비중이 크고, data.go.kr 상세 페이지와 다운로드 URL은 운영 상태에 따라 변동된다. 따라서 v1은 모든 후보 dataset을 catalog에 올리되 검증 상태를 명시하고, 확정된 URL만 downloader에서 사용한다.
+KNPS는 확인된 OpenAPI catalog가 없고 파일 기반 공간데이터 비중이 크다. data.go.kr 상세 페이지와 다운로드 URL은 운영 상태에 따라 변동된다. 따라서 v1은 파일 dataset을 catalog에 올리되 검증 상태를 명시하고, 확정된 URL만 downloader에서 사용한다.
 
 결정:
 
@@ -29,7 +29,7 @@ KNPS는 OpenAPI보다 파일 기반 공간데이터 비중이 크고, data.go.kr
 
 Status: accepted
 
-provider 라이브러리는 원본 API/file dataset을 안정적으로 호출하고 record/model/catalog를 제공한다. TripMate 도메인 feature로 바꾸는 일은 `python-krtour-map` ETL 책임이다.
+provider 라이브러리는 원본 file dataset을 안정적으로 호출하고 record/model/catalog를 제공한다. TripMate 도메인 feature로 바꾸는 일은 `python-krtour-map` ETL 책임이다.
 
 결정:
 
