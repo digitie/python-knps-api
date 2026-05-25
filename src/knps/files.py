@@ -9,6 +9,8 @@ from .catalog import file_dataset, file_datasets
 from .exceptions import KnpsRequestError
 from .models import FileArtifact, FileDataset
 
+_DEFAULT_PREVIEW_ROWS = 5
+
 
 class _DownloadHttp(Protocol):
     async def get_bytes(
@@ -44,7 +46,16 @@ class FileDataNamespace:
     async def download(self, key: str, *, max_bytes: int | None = None) -> bytes:
         """검증된 직접 다운로드 URL에서 파일 bytes를 가져온다."""
 
-        dataset = file_dataset(key)
+        return await self._fetch_dataset_bytes(file_dataset(key), max_bytes=max_bytes)
+
+    async def _fetch_dataset_bytes(
+        self,
+        dataset: FileDataset,
+        *,
+        max_bytes: int | None = None,
+    ) -> bytes:
+        """이미 lookup된 ``FileDataset``에서 bytes를 가져오는 내부 helper."""
+
         if not dataset.download_url:
             raise KnpsRequestError(
                 f"download_url is not verified for dataset {dataset.key}",
@@ -65,7 +76,7 @@ class FileDataNamespace:
         key: str,
         data: bytes,
         *,
-        preview_rows: int = 5,
+        preview_rows: int = _DEFAULT_PREVIEW_ROWS,
     ) -> FileArtifact:
         """다운로드 bytes를 파일 구조/CSV preview DTO로 변환한다."""
 
@@ -79,7 +90,7 @@ class FileDataNamespace:
         self,
         key: str,
         *,
-        preview_rows: int = 5,
+        preview_rows: int = _DEFAULT_PREVIEW_ROWS,
         max_bytes: int | None = None,
     ) -> FileArtifact:
         """파일을 다운로드한 뒤 Pydantic DTO로 읽는다.
@@ -87,7 +98,11 @@ class FileDataNamespace:
         ``max_bytes``로 다운로드를 잘라낼 수 있다. ZIP/CSV가 잘리면 reader가
         ``binary``로 fallback하거나 partial preview만 반환할 수 있으니, 큰
         파일을 빠르게 살펴볼 때만 사용한다.
+
+        ``download`` + ``inspect_bytes``를 따로 호출하면 catalog lookup이 두 번
+        일어나는데, 이 메서드는 lookup을 한 번만 수행한다.
         """
 
-        data = await self.download(key, max_bytes=max_bytes)
-        return self.inspect_bytes(key, data, preview_rows=preview_rows)
+        dataset = file_dataset(key)
+        data = await self._fetch_dataset_bytes(dataset, max_bytes=max_bytes)
+        return read_file_artifact(dataset, data, preview_rows=preview_rows)

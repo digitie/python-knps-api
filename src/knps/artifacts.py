@@ -93,11 +93,15 @@ def _read_csv_preview(
         return None
 
     headers = tuple(_clean_header(header, index) for index, header in enumerate(rows[0]))
+    header_count = len(headers)
     preview_values: list[CsvPreviewRow] = []
     for raw_row in rows[1 : 1 + preview_rows]:
-        padded = [*raw_row, *([None] * max(0, len(headers) - len(raw_row)))]
-        values = dict(zip(headers, padded[: len(headers)], strict=False))
-        preview_values.append(CsvPreviewRow(values=values))
+        # header_count보다 짧으면 None으로 패딩, 길면 나머지를 extra_fields로 보존.
+        in_header_vals: list[str | None] = list(raw_row[:header_count])
+        in_header_vals.extend([None] * (header_count - len(in_header_vals)))
+        extra = tuple(raw_row[header_count:])
+        pairs = tuple(zip(headers, in_header_vals, strict=True))
+        preview_values.append(CsvPreviewRow(values=pairs, extra_fields=extra))
 
     return CsvPreview(
         member_name=member_name,

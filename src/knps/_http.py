@@ -91,21 +91,42 @@ class KnpsHttp:
         provider: str,
         endpoint: str,
     ) -> ResponseLike:
+        """3회 재시도하면서 네트워크 오류와 일시적 5xx/429를 흡수한다.
+
+        idempotent GET이라 5xx/429 재시도는 안전하고, data.go.kr은 대용량
+        파일 다운로드 도중 일시적 503/504를 흘리는 경향이 있다. 마지막
+        시도가 여전히 5xx/429면 그대로 반환해서 ``_raise_for_status``가
+        구조화된 예외로 변환한다.
+        """
+
         last_error: httpx.HTTPError | None = None
         for attempt in range(3):
             try:
-                return await self.session.get(url, timeout=self.timeout)
+                response = await self.session.get(url, timeout=self.timeout)
             except httpx.HTTPError as exc:
                 last_error = exc
                 if attempt == 2:
                     break
                 await asyncio.sleep(0.25 * (attempt + 1))
+                continue
+
+            if attempt < 2 and _should_retry_status(response.status_code):
+                await asyncio.sleep(0.25 * (attempt + 1))
+                continue
+            return response
+
         raise KnpsRequestError(
             f"request failed: {last_error}",
             provider=provider,
             endpoint=endpoint,
             failure_kind="network",
         ) from last_error
+
+
+def _should_retry_status(status: int) -> bool:
+    """일시적 실패로 보고 GET을 재시도해도 되는 status 집합."""
+
+    return status >= 500 or status == 429
 
 
 def _raise_for_status(
