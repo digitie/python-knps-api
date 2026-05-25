@@ -80,8 +80,14 @@ class FileDataNamespace:
         key: str,
         *,
         preview_rows: int = 5,
+        max_bytes: int | None = None,
     ) -> FileArtifact:
-        """파일을 다운로드한 뒤 Pydantic DTO로 읽는다."""
+        """파일을 다운로드한 뒤 Pydantic DTO로 읽는다.
 
-        data = await self.download(key)
+        ``max_bytes``로 다운로드를 잘라낼 수 있다. ZIP/CSV가 잘리면 reader가
+        ``binary``로 fallback하거나 partial preview만 반환할 수 있으니, 큰
+        파일을 빠르게 살펴볼 때만 사용한다.
+        """
+
+        data = await self.download(key, max_bytes=max_bytes)
         return self.inspect_bytes(key, data, preview_rows=preview_rows)

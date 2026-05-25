@@ -47,16 +47,17 @@ def _read_zip_artifact(
         for info in archive.infolist():
             if info.is_dir():
                 continue
+            decoded_name = _decode_zip_member_name(info)
             members.append(
                 FileMember(
-                    name=_decode_zip_name(info.filename),
+                    name=decoded_name,
                     size_bytes=info.file_size,
                     compressed_size_bytes=info.compress_size,
                 )
             )
-            if info.filename.lower().endswith(CSV_SUFFIXES):
+            if decoded_name.lower().endswith(CSV_SUFFIXES):
                 preview = _read_csv_preview(
-                    _decode_zip_name(info.filename),
+                    decoded_name,
                     archive.read(info),
                     preview_rows=preview_rows,
                 )
@@ -83,11 +84,11 @@ def _read_csv_preview(
         return None
     text, encoding = decoded
 
-    lines = text.splitlines()
-    if not lines:
+    if not text:
         return None
 
-    rows = list(csv.reader(lines))
+    # csv.reader가 직접 텍스트 스트림을 받게 해서 quoted multi-line cell을 보존한다.
+    rows = list(csv.reader(io.StringIO(text)))
     if not rows or len(rows[0]) < 2:
         return None
 
@@ -121,7 +122,17 @@ def _clean_header(value: str, index: int) -> str:
     return header or f"field_{index + 1}"
 
 
-def _decode_zip_name(name: str) -> str:
+def _decode_zip_member_name(info: zipfile.ZipInfo) -> str:
+    """ZIP entry name을 한글 친화적으로 디코드한다.
+
+    KNPS 파일들은 대부분 cp949 raw bytes filename으로 저장되어 있어서,
+    Python ``zipfile``이 cp437로 한 번 디코드한 결과를 다시 cp437 bytes로
+    되돌린 뒤 cp949로 디코드하면 원본 한글이 복원된다. UTF-8 flag(0x800)가
+    켜진 utf-8 filename은 cp437 인코드 단계에서 자연스럽게 ``UnicodeError``가
+    나서 원본 이름을 그대로 돌려준다.
+    """
+
+    name = info.filename
     try:
         return name.encode("cp437").decode("cp949")
     except UnicodeError:
