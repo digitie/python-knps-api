@@ -10,7 +10,7 @@
 | import | `from knps import KnpsClient` |
 | Feature.kind | `place`, `area`, `route`, `weather` / notice / timeseries |
 | 코드 entrypoint | `krtour.map.providers.knps`, `krtour.map.knps` |
-| 인증 | `KNPS_SERVICE_KEY` 또는 `DATA_GO_KR_SERVICE_KEY` |
+| 다운로드 | data.go.kr fileData 직접 다운로드 URL |
 | 갱신 주기 | dataset별 (안전 notice: 30분~일, 공간데이터: 월~연) |
 
 ## 2. dataset 매핑

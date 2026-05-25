@@ -18,24 +18,18 @@ class KnpsClient:
     def __init__(
         self,
         *,
-        api_key: str | None = None,
         timeout: float | str | None = None,
         max_rps: float | str | None = None,
         session: AsyncSessionLike | None = None,
-        service_key_param: str = "serviceKey",
     ) -> None:
         self.config = KnpsConfig.from_env(
-            api_key=api_key,
             timeout=timeout,
             max_rps=max_rps,
         )
-        self.api_key = self.config.api_key
         self.timeout = self.config.timeout
         self._http = KnpsHttp(
-            self.api_key,
             timeout=self.timeout,
             session=session,
-            service_key_param=service_key_param,
             max_rps=self.config.max_rps,
         )
         self.files = FileDataNamespace(self)
@@ -43,7 +37,13 @@ class KnpsClient:
 
     @classmethod
     def from_env(cls, **kwargs: Any) -> KnpsClient:
-        """환경 변수 기반 설정으로 클라이언트를 만든다."""
+        """``KnpsClient(...)``의 호환성 alias.
+
+        과거 API에서는 ``DATA_GO_KR_SERVICE_KEY`` 등을 환경 변수로 읽었다.
+        keyless 파일 다운로드만 남으면서 이 메서드는 단순히 인자를 그대로
+        ``__init__``에 전달한다. 새 코드에서는 ``KnpsClient(...)``를 직접
+        호출하는 것을 권장한다.
+        """
 
         return cls(**kwargs)
 

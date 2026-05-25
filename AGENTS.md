@@ -6,7 +6,7 @@
 
 - Markdown/RST 문서는 한글로 작성한다.
 - `python-mois-api`, `python-krheritage-api`, `python-khoa-api`, `python-krforest-api`의 구조와 방향성을 따른다.
-- KNPS 인증, rate limit, exception 계층은 다른 provider와 공유하지 않는다.
+- KNPS rate limit, exception 계층은 다른 provider와 공유하지 않는다.
 - `python-krtour-map` 안에 KNPS wrapper를 만들지 않는다. 이 라이브러리의 public client/model/catalog를 직접 사용하게 한다.
 - data.go.kr ID나 다운로드 URL이 검증되지 않은 경우 문서와 catalog에 `needs_verification`을 남긴다.
 

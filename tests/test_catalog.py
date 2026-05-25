@@ -27,11 +27,18 @@ def test_lookup_by_key_and_id() -> None:
     assert by_key.feature_kind == "route"
 
 
-def test_catalog_entries_include_only_verified_file_datasets() -> None:
+def test_catalog_entries_include_only_file_datasets() -> None:
     entries = catalog_entries()
     assert {entry.kind for entry in entries} == {"file_dataset"}
     assert all(entry.provider for entry in entries)
-    assert all(entry.verification_status == "verified" for entry in entries)
+
+
+def test_keyless_direct_download_urls_are_recorded() -> None:
+    direct = {dataset.key: dataset for dataset in file_datasets() if dataset.direct_download}
+    assert len(direct) == 13
+    assert "knps_basic_statistics" not in direct
+    assert all(dataset.download_url for dataset in direct.values())
+    assert all("atchFileId=" in dataset.download_url for dataset in direct.values())
 
 
 def test_verified_data_go_ids_match_catalog() -> None:

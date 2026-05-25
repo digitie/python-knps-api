@@ -5,9 +5,9 @@
 ## Client API shape
 
 - public client는 `httpx`/`asyncio` 기반이다.
-- 생성 방식은 `KnpsClient(api_key=...)`, `KnpsClient.from_env()`, `async with`를 지원한다.
-- 지원 환경 변수는 `KNPS_SERVICE_KEY`, `DATA_GO_KR_SERVICE_KEY`다. KNPS 전용 값이 공통 data.go.kr 값보다 우선한다.
-- `auth`, `rate limit`, `exception`은 KNPS 전용 계층이다. 다른 provider의 예외를 import하지 않는다.
+- 생성 방식은 `KnpsClient()`, `KnpsClient.from_env()`, `async with`를 지원한다.
+- data.go.kr 파일 다운로드는 2026-05-25 live check 기준으로 별도 키 없이 동작한다.
+- `rate limit`, `exception`은 KNPS 전용 계층이다. 다른 provider의 예외를 import하지 않는다.
 - downstream인 `python-krtour-map`은 wrapper/adapter를 만들지 않고 이 라이브러리의 public client/catalog/model을 직접 사용한다.
 
 ## 구현 상태
@@ -15,7 +15,8 @@
 | 영역 | 상태 | 비고 |
 |------|------|------|
 | catalog model | implemented | `FileDataset`, `CatalogEntry` |
-| file dataset catalog | implemented | 직접 다운로드 URL은 검증된 항목만 사용 |
+| file dataset catalog | implemented | 13개 직접 다운로드 URL 검증, `knps_basic_statistics`는 URL 미확인 |
+| file artifact DTO | implemented | `FileArtifact`, `FileMember`, `CsvPreview` |
 | SHP/GeoJSON parser | planned | `geo` extra에서 `pyshp`, `pyproj` 사용 예정 |
 | typed feature model | planned | 원본 provider model만 제공, feature 변환은 krtour-map ETL |
 

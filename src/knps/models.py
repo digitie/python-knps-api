@@ -19,6 +19,7 @@ Category: TypeAlias = Literal[
 Provider: TypeAlias = Literal["data.go.kr", "knps.or.kr"]
 CatalogKind: TypeAlias = Literal["file_dataset"]
 VerificationStatus: TypeAlias = Literal["verified", "needs_verification", "planned"]
+FileArtifactKind: TypeAlias = Literal["zip", "csv", "binary"]
 
 
 class KnpsModel(BaseModel):
@@ -62,3 +63,55 @@ class CatalogEntry(KnpsModel):
     url: str | None = None
     formats: tuple[str, ...] = ()
     verification_status: VerificationStatus = "needs_verification"
+
+
+class FileMember(KnpsModel):
+    """다운로드 파일 내부 member 메타데이터."""
+
+    name: str
+    size_bytes: int
+    compressed_size_bytes: int | None = None
+
+
+class CsvPreviewRow(KnpsModel):
+    """CSV preview row DTO.
+
+    Row 값은 header 순서를 보존하기 위해 ``(header, value)`` tuple의 tuple로
+    저장한다. ``KnpsModel``의 frozen은 attribute 재할당만 막아서 내부 dict의
+    mutation을 허용했는데, tuple로 두면 진짜 immutable이 된다.
+
+    원본 row가 header 개수보다 많은 컬럼을 가지면 그 trailing 값들은
+    ``extra_fields``에 보존되어 손실 없이 표현된다 (data.go.kr CSV에 가끔
+    있는 trailing comma 등을 위한 안전장치).
+
+    dict 형태가 필요하면 ``dict(row.values)`` 또는 ``row.as_dict``를 쓴다.
+    """
+
+    values: tuple[tuple[str, str | None], ...]
+    extra_fields: tuple[str | None, ...] = ()
+
+    @property
+    def as_dict(self) -> dict[str, str | None]:
+        """``values``를 dict로 변환한 사본을 돌려준다."""
+
+        return dict(self.values)
+
+
+class CsvPreview(KnpsModel):
+    """CSV-like file preview DTO."""
+
+    member_name: str | None = None
+    encoding: str
+    headers: tuple[str, ...]
+    rows: tuple[CsvPreviewRow, ...]
+
+
+class FileArtifact(KnpsModel):
+    """다운로드 bytes를 Pydantic DTO로 읽은 결과."""
+
+    dataset_key: str
+    data_go_id: str
+    kind: FileArtifactKind
+    size_bytes: int
+    members: tuple[FileMember, ...] = ()
+    csv_previews: tuple[CsvPreview, ...] = ()

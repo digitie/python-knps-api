@@ -2,7 +2,7 @@ from knps import KnpsClient
 
 
 async def test_client_exposes_file_dataset_catalog_only() -> None:
-    client = KnpsClient(api_key="secret")
+    client = KnpsClient()
     try:
         keys = {dataset.key for dataset in client.file_datasets()}
         catalog_kinds = {entry.kind for entry in client.catalog()}
