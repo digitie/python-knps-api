@@ -171,7 +171,7 @@ class FileDataNamespace:
     ) -> geopandas.GeoDataFrame:
         """ZIP shapefile bytes를 ``geopandas.GeoDataFrame``으로 로드한다.
 
-        ``geopandas`` extra가 필요하다. ``source_crs``로 좌표계를 덮어쓰고,
+        ``geo`` extra가 필요하다. ``source_crs``로 좌표계를 덮어쓰고,
         ``target_crs``로 재투영할 수 있다.
         """
 

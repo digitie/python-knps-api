@@ -84,7 +84,7 @@ CSV는 WKT 컬럼(`wkt`/`geom`/`the_geom` 등) 또는 위경도 컬럼(`경도`/
 
 ### geopandas로 로드
 
-`geopandas` extra(`pip install -e ".[geopandas]"`)를 설치하면 ZIP shapefile을 `geopandas.GeoDataFrame`으로 바로 로드할 수 있다. 한글 속성은 기본 `cp949`로 디코드하고, `.prj`가 없으면 `source_crs`로 좌표계를 선언, `target_crs`로 재투영한다.
+`geo` extra(`pip install -e ".[geo]"`)를 설치하면 ZIP shapefile을 `geopandas.GeoDataFrame`으로 바로 로드할 수 있다. 한글 속성은 기본 `cp949`로 디코드하고, `.prj`가 없으면 `source_crs`로 좌표계를 선언, `target_crs`로 재투영한다.
 
 ```python
 async with KnpsClient() as client:

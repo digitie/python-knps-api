@@ -41,11 +41,9 @@ debug-ui = [
   "streamlit>=1.35",
 ]
 geo = [
+  "geopandas>=1.0",
   "pyproj>=3.6",
   "pyshp>=2.3",
-]
-geopandas = [
-  "geopandas>=1.0",
 ]
 
 [tool.setuptools.package-dir]
@@ -78,7 +76,7 @@ files = ["src", "debug_ui"]
 module = ["pandas", "pandas.*", "streamlit", "streamlit.*"]
 ignore_missing_imports = true
 
-# geopandas는 선택 의존성(`geopandas` extra)이고 type stub이 불완전하다.
+# geopandas는 선택 의존성(`geo` extra)이고 type stub이 불완전하다.
 # shapefile -> GeoDataFrame loader에서만 lazy import한다.
 [[tool.mypy.overrides]]
 module = ["geopandas", "geopandas.*"]

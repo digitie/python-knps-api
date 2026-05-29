@@ -86,7 +86,7 @@ def read_shapefile_geodataframe(
 ) -> geopandas.GeoDataFrame:
     """ZIP shapefile 번들을 ``geopandas.GeoDataFrame``으로 로드해 돌려준다.
 
-    ``geopandas``는 선택 의존성(``geopandas`` extra)이다. 설치되지 않으면 설치
+    ``geopandas``는 선택 의존성(``geo`` extra)이다. 설치되지 않으면 설치
     방법을 안내하는 :class:`KnpsParseError`를 던진다.
 
     - ``data``는 shapefile 구성요소(``.shp``/``.dbf``/``.shx``/``.prj`` 등)를
@@ -619,8 +619,8 @@ def _import_geopandas(dataset: FileDataset) -> Any:
         import geopandas
     except ModuleNotFoundError as error:
         raise KnpsParseError(
-            "geopandas shapefile loading requires the optional 'geopandas' extra "
-            "(pip install python-knps-api[geopandas])",
+            "geopandas shapefile loading requires the optional 'geo' extra "
+            "(pip install python-knps-api[geo])",
             provider=dataset.provider,
             endpoint=dataset.key,
             failure_kind="dependency",
