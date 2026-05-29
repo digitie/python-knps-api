@@ -66,6 +66,22 @@ async with KnpsClient() as client:
     print(artifact.kind, artifact.csv_previews[0].headers)
 ```
 
+## Geometry 추출
+
+공간데이터(SHP ZIP, WKT/위경도 CSV)는 `geo` extra(`pyshp`, `pyproj`)를 설치하면 `GeoFeatureCollection`으로 추출할 수 있다. shapefile `.prj` 또는 명시한 `source_crs`가 확인되면 WGS84로 재투영하고, 원본 좌표계는 `source_crs`에 보존한다.
+
+```python
+async with KnpsClient() as client:
+    collection = await client.files.download_geometries(
+        "knps_park_boundaries",
+        source_crs="EPSG:5179",  # .prj가 있으면 생략 가능
+    )
+    print(collection.geometry_type, collection.source_crs, collection.crs)
+    print(collection.features[0].as_geojson)
+```
+
+CSV는 WKT 컬럼(`wkt`/`geom`/`the_geom` 등) 또는 위경도 컬럼(`경도`/`위도`, `lon`/`lat`, `x`/`y`)을 자동 감지한다. 좌표계를 알 수 없으면 재투영 없이 원본 좌표를 그대로 보존한다.
+
 ## Debug UI
 
 Streamlit 기반 디버그 UI는 KNPS file dataset catalog를 빠르게 확인하고, Metadata, Catalog, Fixture 탭으로 검토할 수 있다.
