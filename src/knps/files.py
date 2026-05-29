@@ -7,7 +7,8 @@ from typing import Protocol, cast
 from .artifacts import read_file_artifact
 from .catalog import file_dataset, file_datasets
 from .exceptions import KnpsRequestError
-from .models import FileArtifact, FileDataset
+from .geometry import WGS84, extract_geometries
+from .models import FileArtifact, FileDataset, GeoFeatureCollection
 
 _DEFAULT_PREVIEW_ROWS = 5
 
@@ -106,3 +107,52 @@ class FileDataNamespace:
         dataset = file_dataset(key)
         data = await self._fetch_dataset_bytes(dataset, max_bytes=max_bytes)
         return read_file_artifact(dataset, data, preview_rows=preview_rows)
+
+    def extract_geometries(
+        self,
+        key: str,
+        data: bytes,
+        *,
+        source_crs: str | None = None,
+        target_crs: str | None = WGS84,
+        max_features: int | None = None,
+    ) -> GeoFeatureCollection:
+        """다운로드 bytes에서 geometry feature를 추출한다.
+
+        SHP(``pyshp``)와 좌표 재투영(``pyproj``)은 선택 의존성(``geo`` extra)이다.
+        ``source_crs``가 주어지거나 shapefile ``.prj``에서 감지되고 ``target_crs``와
+        다르면 좌표를 재투영한다.
+        """
+
+        return extract_geometries(
+            file_dataset(key),
+            data,
+            source_crs=source_crs,
+            target_crs=target_crs,
+            max_features=max_features,
+        )
+
+    async def download_geometries(
+        self,
+        key: str,
+        *,
+        source_crs: str | None = None,
+        target_crs: str | None = WGS84,
+        max_features: int | None = None,
+        max_bytes: int | None = None,
+    ) -> GeoFeatureCollection:
+        """파일을 다운로드한 뒤 geometry feature로 추출한다.
+
+        ``download`` + ``extract_geometries``를 따로 호출하는 것과 같지만 catalog
+        lookup을 한 번만 수행한다.
+        """
+
+        dataset = file_dataset(key)
+        data = await self._fetch_dataset_bytes(dataset, max_bytes=max_bytes)
+        return extract_geometries(
+            dataset,
+            data,
+            source_crs=source_crs,
+            target_crs=target_crs,
+            max_features=max_features,
+        )
