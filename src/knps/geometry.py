@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 import re
+import tempfile
 import zipfile
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .artifacts import _clean_header, _decode_text, _decode_zip_member_name
 from .exceptions import KnpsParseError
@@ -23,6 +25,9 @@ from .models import (
     Geometry,
     GeometryType,
 )
+
+if TYPE_CHECKING:
+    import geopandas
 
 WGS84 = "EPSG:4326"
 
@@ -69,6 +74,87 @@ def extract_geometries(
         target_crs=target_crs,
         max_features=max_features,
     )
+
+
+def read_shapefile_geodataframe(
+    dataset: FileDataset,
+    data: bytes,
+    *,
+    source_crs: str | None = None,
+    target_crs: str | None = None,
+    encoding: str | None = "cp949",
+) -> geopandas.GeoDataFrame:
+    """ZIP shapefile 번들을 ``geopandas.GeoDataFrame``으로 로드해 돌려준다.
+
+    ``geopandas``는 선택 의존성(``geopandas`` extra)이다. 설치되지 않으면 설치
+    방법을 안내하는 :class:`KnpsParseError`를 던진다.
+
+    - ``data``는 shapefile 구성요소(``.shp``/``.dbf``/``.shx``/``.prj`` 등)를
+      담은 ZIP bytes여야 한다.
+    - 한글 속성은 기본 ``encoding="cp949"``로 디코드한다. ``.cpg``/UTF-8
+      shapefile이면 ``encoding=None``으로 GDAL 기본값에 맡길 수 있다.
+    - ``source_crs``를 주면 (``.prj`` 유무와 무관하게) 좌표계를 그 값으로
+      덮어쓴다. ``target_crs``를 주면 그 좌표계로 재투영한다. 원본 좌표계를
+      알 수 없는데 ``target_crs``만 주면 :class:`KnpsParseError`를 던진다.
+    """
+
+    gpd = _import_geopandas(dataset)
+
+    if not zipfile.is_zipfile(io.BytesIO(data)):
+        raise KnpsParseError(
+            f"geopandas shapefile loading expects a ZIP shapefile bundle for "
+            f"dataset {dataset.key}",
+            provider=dataset.provider,
+            endpoint=dataset.key,
+            failure_kind="geometry",
+        )
+
+    read_kwargs: dict[str, object] = {}
+    if encoding is not None:
+        read_kwargs["encoding"] = encoding
+
+    with (
+        zipfile.ZipFile(io.BytesIO(data)) as archive,
+        tempfile.TemporaryDirectory() as work_dir,
+    ):
+        shp_path: str | None = None
+        for info in archive.infolist():
+            if info.is_dir():
+                continue
+            basename = os.path.basename(_decode_zip_member_name(info))
+            if not basename:
+                continue
+            member_path = os.path.join(work_dir, basename)
+            with open(member_path, "wb") as handle:
+                handle.write(archive.read(info))
+            if shp_path is None and basename.lower().endswith(_SHP_SUFFIX):
+                shp_path = member_path
+
+        if shp_path is None:
+            raise KnpsParseError(
+                f"no shapefile (.shp) member found in ZIP for dataset {dataset.key}",
+                provider=dataset.provider,
+                endpoint=dataset.key,
+                failure_kind="geometry",
+            )
+
+        geodataframe = gpd.read_file(shp_path, **read_kwargs)
+
+    if source_crs is not None:
+        geodataframe = geodataframe.set_crs(source_crs, allow_override=True)
+
+    if target_crs is not None:
+        if geodataframe.crs is None:
+            raise KnpsParseError(
+                f"cannot reproject dataset {dataset.key} to {target_crs}: source CRS is "
+                "unknown (no .prj in ZIP); pass source_crs to declare it",
+                provider=dataset.provider,
+                endpoint=dataset.key,
+                failure_kind="geometry",
+            )
+        geodataframe = geodataframe.to_crs(target_crs)
+
+    return geodataframe
 
 
 def _extract_from_zip(
@@ -526,6 +612,20 @@ def _import_pyshp(dataset: FileDataset) -> Any:
             failure_kind="dependency",
         ) from error
     return shapefile
+
+
+def _import_geopandas(dataset: FileDataset) -> Any:
+    try:
+        import geopandas
+    except ModuleNotFoundError as error:
+        raise KnpsParseError(
+            "geopandas shapefile loading requires the optional 'geopandas' extra "
+            "(pip install python-knps-api[geopandas])",
+            provider=dataset.provider,
+            endpoint=dataset.key,
+            failure_kind="dependency",
+        ) from error
+    return geopandas
 
 
 def _import_pyproj(dataset: FileDataset) -> Any:

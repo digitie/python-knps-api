@@ -18,6 +18,7 @@
 | file dataset catalog | implemented | 13개 직접 다운로드 URL 검증, `knps_basic_statistics`는 URL 미확인 |
 | file artifact DTO | implemented | `FileArtifact`, `FileMember`, `CsvPreview` |
 | SHP/CSV geometry parser | implemented | `geo` extra의 `pyshp`/`pyproj`로 `GeoFeatureCollection` 추출, `.prj`/명시 `source_crs`로 WGS84 재투영 |
+| geopandas loader | implemented | `geopandas` extra로 ZIP shapefile을 `GeoDataFrame`으로 로드 (`read_shapefile_geodataframe`, `client.files.download_geodataframe`) |
 | typed feature model | planned | 원본 provider model만 제공, feature 변환은 krtour-map ETL |
 
 ## OpenAPI
@@ -52,6 +53,7 @@ KNPS는 현재 이 라이브러리에서 OpenAPI catalog를 제공하지 않는�
 - SHP 한글 인코딩은 CP949 가능성을 기본 고려한다 (`pyshp`에 `encoding="cp949"` 적용).
 - ZIP 내부에 CSV와 shapefile이 함께 있으면 record 식별자는 shapefile attribute를 우선하고, CSV는 부가 필드 보강에 사용한다.
 - geometry 추출은 `client.files.extract_geometries(key, data, ...)` 또는 `await client.files.download_geometries(key, ...)`로 호출한다. CSV는 WKT 컬럼 또는 위경도 컬럼을 자동 감지한다.
+- shapefile을 `geopandas.GeoDataFrame`으로 바로 받으려면 `geopandas` extra를 설치하고 `client.files.read_geodataframe(key, data, ...)` 또는 `await client.files.download_geodataframe(key, ...)`를 사용한다. 한글 속성은 기본 `cp949`로 디코드한다.
 - geometry가 없는 통계/media dataset은 feature 본문에 섞지 않고 별도 timeseries/source link로 전달한다.
 
 ## 제외/보류

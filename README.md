@@ -82,6 +82,20 @@ async with KnpsClient() as client:
 
 CSV는 WKT 컬럼(`wkt`/`geom`/`the_geom` 등) 또는 위경도 컬럼(`경도`/`위도`, `lon`/`lat`, `x`/`y`)을 자동 감지한다. 좌표계를 알 수 없으면 재투영 없이 원본 좌표를 그대로 보존한다.
 
+### geopandas로 로드
+
+`geopandas` extra(`pip install -e ".[geopandas]"`)를 설치하면 ZIP shapefile을 `geopandas.GeoDataFrame`으로 바로 로드할 수 있다. 한글 속성은 기본 `cp949`로 디코드하고, `.prj`가 없으면 `source_crs`로 좌표계를 선언, `target_crs`로 재투영한다.
+
+```python
+async with KnpsClient() as client:
+    gdf = await client.files.download_geodataframe(
+        "knps_park_boundaries",
+        target_crs="EPSG:4326",  # .prj가 없으면 source_crs도 함께 지정
+    )
+    print(gdf.crs, len(gdf))
+    print(gdf.head())
+```
+
 ## Debug UI
 
 Streamlit 기반 디버그 UI는 KNPS file dataset catalog를 빠르게 확인하고, Metadata, Catalog, Fixture 탭으로 검토할 수 있다.
