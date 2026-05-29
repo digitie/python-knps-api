@@ -15,7 +15,7 @@
 - public client는 async/httpx 기반이다.
 - catalog는 코드를 생성하기 쉬운 typed model로 유지한다.
 - file dataset은 먼저 원본 bytes와 metadata를 안정적으로 제공하고, feature 변환은 downstream ETL에서 수행한다.
-- 공간데이터 파서는 선택 의존성(`geo`)으로 둔다.
+- 공간데이터 파서는 `pyshp`/`pyproj` 코어 의존성으로 통합한다. geopandas 등 무거운 의존성은 추가하지 않는다.
 
 ## 자주 보는 문서
 

@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import Protocol, cast
 
 from .artifacts import read_file_artifact
 from .catalog import file_dataset, file_datasets
 from .exceptions import KnpsRequestError
-from .geometry import WGS84, extract_geometries, read_shapefile_geodataframe
+from .geometry import WGS84, extract_geometries
 from .models import FileArtifact, FileDataset, GeoFeatureCollection
-
-if TYPE_CHECKING:
-    import geopandas
 
 _DEFAULT_PREVIEW_ROWS = 5
 
@@ -122,9 +119,9 @@ class FileDataNamespace:
     ) -> GeoFeatureCollection:
         """다운로드 bytes에서 geometry feature를 추출한다.
 
-        SHP(``pyshp``)와 좌표 재투영(``pyproj``)은 선택 의존성(``geo`` extra)이다.
-        ``source_crs``가 주어지거나 shapefile ``.prj``에서 감지되고 ``target_crs``와
-        다르면 좌표를 재투영한다.
+        ZIP 안에 shapefile이 있으면 ``pyshp``로 읽고, 그 외에는 CSV의 WKT/위경도
+        컬럼에서 geometry를 만든다. ``source_crs``가 주어지거나 shapefile
+        ``.prj``에서 감지되고 ``target_crs``와 다르면 ``pyproj``로 재투영한다.
         """
 
         return extract_geometries(
@@ -158,52 +155,4 @@ class FileDataNamespace:
             source_crs=source_crs,
             target_crs=target_crs,
             max_features=max_features,
-        )
-
-    def read_geodataframe(
-        self,
-        key: str,
-        data: bytes,
-        *,
-        source_crs: str | None = None,
-        target_crs: str | None = None,
-        encoding: str | None = "cp949",
-    ) -> geopandas.GeoDataFrame:
-        """ZIP shapefile bytes를 ``geopandas.GeoDataFrame``으로 로드한다.
-
-        ``geo`` extra가 필요하다. ``source_crs``로 좌표계를 덮어쓰고,
-        ``target_crs``로 재투영할 수 있다.
-        """
-
-        return read_shapefile_geodataframe(
-            file_dataset(key),
-            data,
-            source_crs=source_crs,
-            target_crs=target_crs,
-            encoding=encoding,
-        )
-
-    async def download_geodataframe(
-        self,
-        key: str,
-        *,
-        source_crs: str | None = None,
-        target_crs: str | None = None,
-        encoding: str | None = "cp949",
-        max_bytes: int | None = None,
-    ) -> geopandas.GeoDataFrame:
-        """파일을 다운로드한 뒤 ``geopandas.GeoDataFrame``으로 로드한다.
-
-        catalog lookup을 한 번만 수행하는 점을 빼면 ``download`` +
-        ``read_geodataframe``와 동일하다.
-        """
-
-        dataset = file_dataset(key)
-        data = await self._fetch_dataset_bytes(dataset, max_bytes=max_bytes)
-        return read_shapefile_geodataframe(
-            dataset,
-            data,
-            source_crs=source_crs,
-            target_crs=target_crs,
-            encoding=encoding,
         )

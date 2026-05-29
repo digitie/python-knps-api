@@ -14,7 +14,7 @@ from .exceptions import (
     KnpsRequestError,
     KnpsServerError,
 )
-from .geometry import extract_geometries, parse_wkt, read_shapefile_geodataframe
+from .geometry import extract_geometries, parse_wkt
 from .models import (
     CatalogEntry,
     CsvPreview,
@@ -54,5 +54,4 @@ __all__ = [
     "file_dataset",
     "file_datasets",
     "parse_wkt",
-    "read_shapefile_geodataframe",
 ]

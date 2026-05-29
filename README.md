@@ -14,11 +14,7 @@
 pip install -e ".[dev]"
 ```
 
-공간데이터 ZIP/SHP/GeoJSON 파싱을 구현할 때는 선택 의존성을 추가한다.
-
-```bash
-pip install -e ".[dev,geo]"
-```
+공간데이터 SHP 파싱(`pyshp`)과 좌표 재투영(`pyproj`)은 코어 의존성이라 별도 extra 없이 사용할 수 있다.
 
 ## 다운로드
 
@@ -68,7 +64,7 @@ async with KnpsClient() as client:
 
 ## Geometry 추출
 
-공간데이터(SHP ZIP, WKT/위경도 CSV)는 `geo` extra(`pyshp`, `pyproj`)를 설치하면 `GeoFeatureCollection`으로 추출할 수 있다. shapefile `.prj` 또는 명시한 `source_crs`가 확인되면 WGS84로 재투영하고, 원본 좌표계는 `source_crs`에 보존한다.
+공간데이터(SHP ZIP, WKT/위경도 CSV)는 `pyshp`/`pyproj` 코어 의존성으로 `GeoFeatureCollection`으로 추출한다. shapefile `.prj` 또는 명시한 `source_crs`가 확인되면 WGS84로 재투영하고, 원본 좌표계는 `source_crs`에 보존한다.
 
 ```python
 async with KnpsClient() as client:
@@ -80,21 +76,7 @@ async with KnpsClient() as client:
     print(collection.features[0].as_geojson)
 ```
 
-CSV는 WKT 컬럼(`wkt`/`geom`/`the_geom` 등) 또는 위경도 컬럼(`경도`/`위도`, `lon`/`lat`, `x`/`y`)을 자동 감지한다. 좌표계를 알 수 없으면 재투영 없이 원본 좌표를 그대로 보존한다.
-
-### geopandas로 로드
-
-`geo` extra(`pip install -e ".[geo]"`)를 설치하면 ZIP shapefile을 `geopandas.GeoDataFrame`으로 바로 로드할 수 있다. 한글 속성은 기본 `cp949`로 디코드하고, `.prj`가 없으면 `source_crs`로 좌표계를 선언, `target_crs`로 재투영한다.
-
-```python
-async with KnpsClient() as client:
-    gdf = await client.files.download_geodataframe(
-        "knps_park_boundaries",
-        target_crs="EPSG:4326",  # .prj가 없으면 source_crs도 함께 지정
-    )
-    print(gdf.crs, len(gdf))
-    print(gdf.head())
-```
+CSV는 WKT 컬럼(`wkt`/`geom`/`the_geom` 등) 또는 위경도 컬럼(`경도`/`위도`, `lon`/`lat`, `x`/`y`)을 자동 감지한다. 좌표계를 알 수 없으면 재투영 없이 원본 좌표를 그대로 보존한다. shapefile 한글 속성은 기본 `cp949`로 디코드한다.
 
 ## Debug UI
 

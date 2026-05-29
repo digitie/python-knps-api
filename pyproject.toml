@@ -26,6 +26,8 @@ classifiers = [
 dependencies = [
   "httpx>=0.27",
   "pydantic>=2.7",
+  "pyproj>=3.6",
+  "pyshp>=2.3",
 ]
 
 [project.optional-dependencies]
@@ -39,11 +41,6 @@ debug-ui = [
   "pandas>=2.0",
   "pandas-stubs>=2.0",
   "streamlit>=1.35",
-]
-geo = [
-  "geopandas>=1.0",
-  "pyproj>=3.6",
-  "pyshp>=2.3",
 ]
 
 [tool.setuptools.package-dir]
@@ -74,12 +71,6 @@ files = ["src", "debug_ui"]
 # 코어 타입과 무관해서 strict 검사를 강요할 가치가 낮다.
 [[tool.mypy.overrides]]
 module = ["pandas", "pandas.*", "streamlit", "streamlit.*"]
-ignore_missing_imports = true
-
-# geopandas는 선택 의존성(`geo` extra)이고 type stub이 불완전하다.
-# shapefile -> GeoDataFrame loader에서만 lazy import한다.
-[[tool.mypy.overrides]]
-module = ["geopandas", "geopandas.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

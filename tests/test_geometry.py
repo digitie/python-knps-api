@@ -2,10 +2,12 @@ import io
 import zipfile
 
 import pytest
+import shapefile
+from pyproj import CRS
 
 from knps.catalog import file_dataset
 from knps.exceptions import KnpsParseError
-from knps.geometry import extract_geometries, parse_wkt, read_shapefile_geodataframe
+from knps.geometry import extract_geometries, parse_wkt
 
 
 def test_parse_wkt_point() -> None:
@@ -81,7 +83,6 @@ def test_extract_geometries_from_csv_wkt_column() -> None:
 
 
 def test_extract_geometries_csv_reprojects_with_explicit_source_crs() -> None:
-    pytest.importorskip("pyproj")
     dataset = file_dataset("knps_visitor_centers")
     payload = "이름,x,y\n측점,1000000,2000000\n".encode()
 
@@ -116,7 +117,6 @@ def test_extract_geometries_raises_for_zip_without_geometry_source() -> None:
 
 
 def _build_point_shapefile_zip(*, with_prj: bool) -> bytes:
-    shapefile = pytest.importorskip("shapefile")
     shp, dbf, shx = io.BytesIO(), io.BytesIO(), io.BytesIO()
     writer = shapefile.Writer(shp=shp, dbf=dbf, shx=shx, encoding="cp949")
     writer.field("name", "C")
@@ -130,15 +130,12 @@ def _build_point_shapefile_zip(*, with_prj: bool) -> bytes:
         archive.writestr("park.dbf", dbf.getvalue())
         archive.writestr("park.shx", shx.getvalue())
         if with_prj:
-            from pyproj import CRS
-
-            # shapefile .prj는 ESRI WKT1 관례를 따른다 (GDAL/pyproj 모두 인식).
+            # shapefile .prj는 ESRI WKT1 관례를 따른다.
             archive.writestr("park.prj", CRS.from_epsg(5179).to_wkt("WKT1_ESRI"))
     return buffer.getvalue()
 
 
 def test_extract_geometries_from_shapefile_without_prj_keeps_source_coords() -> None:
-    pytest.importorskip("shapefile")
     dataset = file_dataset("knps_park_boundaries")
 
     collection = extract_geometries(dataset, _build_point_shapefile_zip(with_prj=False))
@@ -154,8 +151,6 @@ def test_extract_geometries_from_shapefile_without_prj_keeps_source_coords() -> 
 
 
 def test_extract_geometries_from_shapefile_detects_prj_and_reprojects() -> None:
-    pytest.importorskip("shapefile")
-    pytest.importorskip("pyproj")
     dataset = file_dataset("knps_park_boundaries")
 
     collection = extract_geometries(dataset, _build_point_shapefile_zip(with_prj=True))
@@ -170,8 +165,6 @@ def test_extract_geometries_from_shapefile_detects_prj_and_reprojects() -> None:
 
 
 def test_extract_geometries_explicit_source_crs_overrides_prj() -> None:
-    pytest.importorskip("shapefile")
-    pytest.importorskip("pyproj")
     dataset = file_dataset("knps_park_boundaries")
 
     # source_crs를 target과 같게 주면 재투영을 건너뛰고 원본 좌표를 유지한다.
@@ -211,84 +204,3 @@ def test_max_features_limits_extraction() -> None:
     collection = extract_geometries(dataset, payload, max_features=2)
 
     assert len(collection.features) == 2
-
-
-def test_read_shapefile_geodataframe_returns_geodataframe() -> None:
-    geopandas = pytest.importorskip("geopandas")
-    pytest.importorskip("shapefile")
-    dataset = file_dataset("knps_park_boundaries")
-
-    gdf = read_shapefile_geodataframe(dataset, _build_point_shapefile_zip(with_prj=True))
-
-    assert isinstance(gdf, geopandas.GeoDataFrame)
-    assert len(gdf) == 1
-    # cp949 한글 속성이 올바르게 디코드된다.
-    assert gdf["name"].iloc[0] == "지리산"
-    assert gdf.crs is not None and gdf.crs.to_epsg() == 5179
-
-
-def test_read_shapefile_geodataframe_reprojects_to_target_crs() -> None:
-    pytest.importorskip("geopandas")
-    pytest.importorskip("shapefile")
-    dataset = file_dataset("knps_park_boundaries")
-
-    gdf = read_shapefile_geodataframe(
-        dataset,
-        _build_point_shapefile_zip(with_prj=True),
-        target_crs="EPSG:4326",
-    )
-
-    assert gdf.crs is not None and gdf.crs.to_epsg() == 4326
-    point = gdf.geometry.iloc[0]
-    assert 124.0 < point.x < 132.0
-    assert 33.0 < point.y < 43.0
-
-
-def test_read_shapefile_geodataframe_source_crs_overrides_missing_prj() -> None:
-    pytest.importorskip("geopandas")
-    pytest.importorskip("shapefile")
-    dataset = file_dataset("knps_park_boundaries")
-
-    # .prj가 없어도 source_crs로 좌표계를 선언하고 재투영할 수 있다.
-    gdf = read_shapefile_geodataframe(
-        dataset,
-        _build_point_shapefile_zip(with_prj=False),
-        source_crs="EPSG:5179",
-        target_crs="EPSG:4326",
-    )
-
-    assert gdf.crs is not None and gdf.crs.to_epsg() == 4326
-    assert 124.0 < gdf.geometry.iloc[0].x < 132.0
-
-
-def test_read_shapefile_geodataframe_target_without_crs_raises() -> None:
-    pytest.importorskip("geopandas")
-    pytest.importorskip("shapefile")
-    dataset = file_dataset("knps_park_boundaries")
-
-    with pytest.raises(KnpsParseError) as excinfo:
-        read_shapefile_geodataframe(
-            dataset,
-            _build_point_shapefile_zip(with_prj=False),
-            target_crs="EPSG:4326",
-        )
-    assert excinfo.value.failure_kind == "geometry"
-
-
-def test_read_shapefile_geodataframe_rejects_non_zip() -> None:
-    pytest.importorskip("geopandas")
-    dataset = file_dataset("knps_park_boundaries")
-
-    with pytest.raises(KnpsParseError):
-        read_shapefile_geodataframe(dataset, b"not a zip at all")
-
-
-def test_read_shapefile_geodataframe_raises_without_shp_member() -> None:
-    pytest.importorskip("geopandas")
-    dataset = file_dataset("knps_park_boundaries")
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w") as archive:
-        archive.writestr("readme.txt", b"no shapefile here")
-
-    with pytest.raises(KnpsParseError):
-        read_shapefile_geodataframe(dataset, buffer.getvalue())

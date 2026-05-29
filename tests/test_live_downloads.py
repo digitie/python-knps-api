@@ -39,8 +39,6 @@ async def test_live_every_keyless_url_returns_artifact(dataset_key: str) -> None
 async def test_live_shapefile_geometry_reprojects_to_wgs84() -> None:
     """공원경계 SHP ZIP을 geometry로 추출하고 WGS84로 재투영한다."""
 
-    pytest.importorskip("shapefile")
-    pytest.importorskip("pyproj")
     async with KnpsClient(timeout=120) as client:
         collection = await client.files.download_geometries("knps_park_boundaries")
 
@@ -55,22 +53,6 @@ async def test_live_shapefile_geometry_reprojects_to_wgs84() -> None:
     lon, lat = positions[0]
     assert 124.0 < lon < 132.0
     assert 33.0 < lat < 43.0
-
-
-@pytest.mark.live
-async def test_live_download_geodataframe_loads_park_boundaries() -> None:
-    """공원경계 SHP ZIP을 geopandas GeoDataFrame으로 로드한다."""
-
-    geopandas = pytest.importorskip("geopandas")
-    async with KnpsClient(timeout=120) as client:
-        gdf = await client.files.download_geodataframe(
-            "knps_park_boundaries",
-            target_crs="EPSG:4326",
-        )
-
-    assert isinstance(gdf, geopandas.GeoDataFrame)
-    assert len(gdf) > 0
-    assert gdf.crs is not None and gdf.crs.to_epsg() == 4326
 
 
 def _flatten_positions(node: object) -> list[tuple[float, ...]]:
