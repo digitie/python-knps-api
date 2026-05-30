@@ -106,6 +106,6 @@ async def access_restrictions_to_notices(items, *, fetched_at):
 ## 8. 후속
 
 1. data.go.kr 상세 ID와 직접 다운로드 URL 확정.
-2. SHP/GeoJSON ZIP parser 구현.
+2. ~~SHP/GeoJSON ZIP parser 구현.~~ 완료 — `knps.geometry.extract_geometries`가 SHP(`pyshp`)와 CSV(WKT/위경도 컬럼)에서 `GeoFeatureCollection`을 추출하고, `.prj`/`source_crs`가 확인되면 `pyproj`로 WGS84 재투영한다. GeoJSON parser는 별도 source가 생기면 추가한다.
 3. `python-krtour-map`에 `krtour.map.providers.knps`와 loader 추가.
 4. 위험지역/대피소/notice type 관련 ADR을 accepted로 전환.

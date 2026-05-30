@@ -17,7 +17,7 @@
 | catalog model | implemented | `FileDataset`, `CatalogEntry` |
 | file dataset catalog | implemented | 13개 직접 다운로드 URL 검증, `knps_basic_statistics`는 URL 미확인 |
 | file artifact DTO | implemented | `FileArtifact`, `FileMember`, `CsvPreview` |
-| SHP/GeoJSON parser | planned | `geo` extra에서 `pyshp`, `pyproj` 사용 예정 |
+| SHP/CSV geometry parser | implemented | `geo` extra의 `pyshp`/`pyproj`로 `GeoFeatureCollection` 추출, `.prj`/명시 `source_crs`로 WGS84 재투영 |
 | typed feature model | planned | 원본 provider model만 제공, feature 변환은 krtour-map ETL |
 
 ## OpenAPI
@@ -48,9 +48,10 @@ KNPS는 현재 이 라이브러리에서 OpenAPI catalog를 제공하지 않는�
 
 ## 공간데이터 처리 원칙
 
-- 원본 좌표계는 EPSG:5179 또는 5186일 수 있다. 라이브러리 parser는 WGS84 좌표와 원본 geometry metadata를 함께 보존한다.
-- SHP 한글 인코딩은 CP949 가능성을 기본 고려한다.
+- 원본 좌표계는 EPSG:5179 또는 5186일 수 있다. parser는 `source_crs`(또는 shapefile `.prj`)가 확인되면 WGS84로 재투영하고, `GeoFeatureCollection.source_crs`/`crs`에 원본·현재 좌표계를 함께 보존한다. 좌표계를 알 수 없으면 원본 좌표를 그대로 둔다.
+- SHP 한글 인코딩은 CP949 가능성을 기본 고려한다 (`pyshp`에 `encoding="cp949"` 적용).
 - ZIP 내부에 CSV와 shapefile이 함께 있으면 record 식별자는 shapefile attribute를 우선하고, CSV는 부가 필드 보강에 사용한다.
+- geometry 추출은 `client.files.extract_geometries(key, data, ...)` 또는 `await client.files.download_geometries(key, ...)`로 호출한다. CSV는 WKT 컬럼 또는 위경도 컬럼을 자동 감지한다.
 - geometry가 없는 통계/media dataset은 feature 본문에 섞지 않고 별도 timeseries/source link로 전달한다.
 
 ## 제외/보류

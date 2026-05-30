@@ -20,6 +20,27 @@ Provider: TypeAlias = Literal["data.go.kr", "knps.or.kr"]
 CatalogKind: TypeAlias = Literal["file_dataset"]
 VerificationStatus: TypeAlias = Literal["verified", "needs_verification", "planned"]
 FileArtifactKind: TypeAlias = Literal["zip", "csv", "binary"]
+GeometryType: TypeAlias = Literal[
+    "Point",
+    "MultiPoint",
+    "LineString",
+    "MultiLineString",
+    "Polygon",
+    "MultiPolygon",
+]
+
+# GeoJSON 좌표는 geometry type에 따라 중첩 깊이가 다르다.
+#   Point                       -> Position           (x, y)
+#   MultiPoint / LineString     -> Position 의 tuple
+#   MultiLineString / Polygon   -> Position tuple 의 tuple
+#   MultiPolygon                -> Position tuple tuple 의 tuple
+Position: TypeAlias = tuple[float, ...]
+LineCoordinates: TypeAlias = tuple[Position, ...]
+PolygonCoordinates: TypeAlias = tuple[LineCoordinates, ...]
+MultiPolygonCoordinates: TypeAlias = tuple[PolygonCoordinates, ...]
+GeometryCoordinates: TypeAlias = (
+    Position | LineCoordinates | PolygonCoordinates | MultiPolygonCoordinates
+)
 
 
 class KnpsModel(BaseModel):
@@ -115,3 +136,82 @@ class FileArtifact(KnpsModel):
     size_bytes: int
     members: tuple[FileMember, ...] = ()
     csv_previews: tuple[CsvPreview, ...] = ()
+
+
+def _coordinates_to_lists(coordinates: object) -> object:
+    """중첩 tuple 좌표를 GeoJSON 직렬화용 중첩 list로 변환한다."""
+
+    if isinstance(coordinates, (tuple, list)):
+        return [_coordinates_to_lists(item) for item in coordinates]
+    return coordinates
+
+
+class Geometry(KnpsModel):
+    """GeoJSON 호환 geometry DTO.
+
+    ``coordinates``는 immutable을 위해 중첩 list 대신 중첩 tuple로 보존한다.
+    GeoJSON dict가 필요하면 ``as_geojson``을 사용한다.
+    """
+
+    type: GeometryType
+    coordinates: GeometryCoordinates
+
+    @property
+    def as_geojson(self) -> dict[str, object]:
+        """``{"type": ..., "coordinates": [...]}`` GeoJSON dict를 돌려준다."""
+
+        return {"type": self.type, "coordinates": _coordinates_to_lists(self.coordinates)}
+
+
+class GeoFeature(KnpsModel):
+    """geometry 1건과 attribute 속성을 보존하는 feature DTO.
+
+    ``properties``는 header 순서를 보존하기 위해 ``(name, value)`` tuple의 tuple로
+    저장한다 (``CsvPreviewRow``와 동일한 규약). dict가 필요하면 ``as_dict``를 쓴다.
+    geometry가 없는 record는 ``geometry=None``으로 보존한다.
+    """
+
+    geometry: Geometry | None = None
+    properties: tuple[tuple[str, str | None], ...] = ()
+
+    @property
+    def as_dict(self) -> dict[str, str | None]:
+        """``properties``를 dict로 변환한 사본을 돌려준다."""
+
+        return dict(self.properties)
+
+    @property
+    def as_geojson(self) -> dict[str, object]:
+        """GeoJSON ``Feature`` dict를 돌려준다."""
+
+        return {
+            "type": "Feature",
+            "geometry": None if self.geometry is None else self.geometry.as_geojson,
+            "properties": dict(self.properties),
+        }
+
+
+class GeoFeatureCollection(KnpsModel):
+    """다운로드 bytes에서 추출한 geometry feature 묶음 DTO.
+
+    ``source_crs``는 원본 좌표계(예: ``EPSG:5179``), ``crs``는 현재
+    ``features`` 좌표가 따르는 좌표계다. 좌표를 재투영하면 ``crs``가
+    ``source_crs``와 달라지고, 재투영하지 않으면 둘이 같다.
+    """
+
+    dataset_key: str
+    data_go_id: str
+    member_name: str | None = None
+    geometry_type: str | None = None
+    source_crs: str | None = None
+    crs: str | None = None
+    features: tuple[GeoFeature, ...] = ()
+
+    @property
+    def as_geojson(self) -> dict[str, object]:
+        """GeoJSON ``FeatureCollection`` dict를 돌려준다."""
+
+        return {
+            "type": "FeatureCollection",
+            "features": [feature.as_geojson for feature in self.features],
+        }

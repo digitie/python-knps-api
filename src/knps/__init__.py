@@ -14,7 +14,18 @@ from .exceptions import (
     KnpsRequestError,
     KnpsServerError,
 )
-from .models import CatalogEntry, CsvPreview, CsvPreviewRow, FileArtifact, FileDataset, FileMember
+from .geometry import extract_geometries, parse_wkt
+from .models import (
+    CatalogEntry,
+    CsvPreview,
+    CsvPreviewRow,
+    FileArtifact,
+    FileDataset,
+    FileMember,
+    GeoFeature,
+    GeoFeatureCollection,
+    Geometry,
+)
 
 PROVIDER_NAME = "python-knps-api"
 
@@ -26,6 +37,9 @@ __all__ = [
     "FileArtifact",
     "FileDataset",
     "FileMember",
+    "GeoFeature",
+    "GeoFeatureCollection",
+    "Geometry",
     "KnpsApiError",
     "KnpsAuthError",
     "KnpsClient",
@@ -36,6 +50,8 @@ __all__ = [
     "KnpsRequestError",
     "KnpsServerError",
     "catalog_entries",
+    "extract_geometries",
     "file_dataset",
     "file_datasets",
+    "parse_wkt",
 ]
