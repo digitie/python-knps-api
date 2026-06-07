@@ -57,6 +57,38 @@ async def test_live_shapefile_geometry_reprojects_to_wgs84() -> None:
     assert 33.0 < lat < 43.0
 
 
+@pytest.mark.live
+async def test_live_read_place_records_visitor_centers() -> None:
+    """실데이터에서 typed place record가 source_id/name/lon/lat을 채운다."""
+
+    async with KnpsClient(timeout=120) as client:
+        records = await client.files.read_place_records("knps_visitor_centers")
+
+    assert records
+    first = records[0]
+    assert first.dataset_key == "knps_visitor_centers"
+    assert first.source_id and not first.source_id.startswith("row:")
+    assert first.name
+    assert first.longitude is not None and 124.0 < first.longitude < 132.0
+    assert first.latitude is not None and 33.0 < first.latitude < 43.0
+
+
+@pytest.mark.live
+async def test_live_read_geo_records_trails() -> None:
+    """실데이터에서 typed geo record가 WKT와 정규화 필드를 채운다."""
+
+    async with KnpsClient(timeout=120) as client:
+        records = await client.files.read_geo_records("knps_trails", max_features=50)
+
+    assert records
+    first = records[0]
+    assert first.dataset_key == "knps_trails"
+    assert first.geom_wkt.startswith(("POINT", "LINESTRING", "MULTILINESTRING"))
+    assert first.name
+    assert first.longitude is not None and 124.0 < first.longitude < 132.0
+    assert first.latitude is not None and 33.0 < first.latitude < 43.0
+
+
 def _flatten_positions(node: object) -> list[tuple[float, ...]]:
     if isinstance(node, tuple) and node and all(isinstance(item, float) for item in node):
         return [node]  # type: ignore[list-item]

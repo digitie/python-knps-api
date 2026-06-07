@@ -80,7 +80,24 @@ async with KnpsClient() as client:
     print(collection.features[0].as_geojson)
 ```
 
-CSV는 WKT 컬럼(`wkt`/`geom`/`the_geom` 등) 또는 위경도 컬럼(`경도`/`위도`, `lon`/`lat`, `x`/`y`)을 자동 감지한다. 좌표계를 알 수 없으면 재투영 없이 원본 좌표를 그대로 보존한다.
+CSV는 WKT 컬럼(`wkt`/`geom`/`the_geom`/`gis위치` 등) 또는 위경도 컬럼(`경도`/`위도`, `lon`/`lat`, `x`/`y`)을 자동 감지한다. 좌표계를 알 수 없으면 재투영 없이 원본 좌표를 그대로 보존한다.
+
+## Typed·정규화 record
+
+heterogeneous한 KNPS CSV header(예: `명칭_한글(KOR_NM)` vs `소속위치(STN_NAME)` vs 순한글 `탐방코스(한글)`)를 downstream이 best-guess하지 않도록, `read_place_records` / `read_geo_records`가 공통 필드로 정규화한 typed record(`KnpsPlaceRecord` / `KnpsGeoRecord`)를 돌려준다. normalizer는 header의 `(영문코드)` 접미사를 먼저 시도하고, 코드가 없으면 순한글 header 이름으로 fallback한다. 원본 header→value 매핑 전체는 `raw`에 보존된다.
+
+```python
+async with KnpsClient() as client:
+    # point CSV (탐방안내소/화장실/야영장/문화자원/기상관측시설 등) — 전체 행 정규화
+    places = await client.files.read_place_records("knps_visitor_centers")
+    print(places[0].source_id, places[0].name, places[0].longitude, places[0].latitude)
+
+    # 공간 dataset — geometry는 WKT로, 속성은 정규화 필드로
+    geo = await client.files.read_geo_records("knps_trails")
+    print(geo[0].name, geo[0].geom_wkt[:40], geo[0].longitude, geo[0].latitude)
+```
+
+`read_place_records`는 preview가 아니라 첫 CSV member의 모든 행을 읽는다. `read_geo_records`는 `download_geometries` 위에 올라가므로, 폴리곤 SHP dataset(`knps_park_boundaries`/`knps_protected_areas` 등)은 `geo` extra(`pyshp`/`pyproj`)가 설치돼 있어야 하고, 없으면 `KnpsParseError`가 난다.
 
 ## Debug UI
 

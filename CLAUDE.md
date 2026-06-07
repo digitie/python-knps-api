@@ -7,10 +7,8 @@
 ## 프로젝트 현황 (2026-05-31)
 
 국립공원공단(KNPS) 오픈 API 및 파일 기반 공간데이터를 제공하는 Python Client 및 Catalog 라이브러리.
-현재 `feat/style-and-mcp-settings` 작업을 통해 `maplibre-vworld-js` 프로젝트의 스타일 가이드와 AI 에이전트 협업 환경(MCP 및 에이전트별 고정 worktree)을 이식하고 적용했다.
-
-- `feat/style-and-mcp-settings`: 스타일 및 MCP 설정 이식 완료.
-- `agent/antigravity`: T-002(공간데이터 파싱) 및 T-003(Live API 및 ID/URL 검증) 완료. 로컬 Git에서 서비스키(`22f6c708dbafcf5d94cb0479334665aa1759c770c177c30559f8e2a1a70c296a`)를 성공적으로 추출하여 15개 Live 테스트 전체 통과 확인.
+- `feat/prefix-worktrees`: 워크트리 prefix를 `python-knps-api-*`로 변경 완료.
+- `agent/antigravity`: T-004(RustFS 연동 및 로컬 이중 저장) 완료. 로컬 및 Live 테스트 100% 통과 확인.
 
 ### 잔존 기술 부채
 
@@ -18,11 +16,12 @@
 
 ### 브랜치 정리
 
-- `agent/antigravity` — 현재 작업 브랜치. T-002, T-003 검증 완료 상태.
+- `main` — 머지 완료 및 최신 상태.
+- `agent/antigravity` — RustFS 연동 완료 상태.
 
 ## 에이전트 worktree + CodeGraph
 
-ChatGPT Codex는 `F:\dev\knps-codex`, Claude Code는 `F:\dev\knps-claude`, Google Antigravity 2.0은 `F:\dev\knps-antigravity`를 고정 worktree로 사용한다. 새 작업은 해당 worktree에서 `git fetch` 후 `git switch -c agent/<topic> main`으로 브랜치를 딴다.
+ChatGPT Codex는 `F:\dev\python-knps-api-codex`, Claude Code는 `F:\dev\python-knps-api-claude`, Google Antigravity 2.0은 `F:\dev\python-knps-api-antigravity`를 고정 worktree로 사용한다. 새 작업은 해당 worktree에서 `git fetch` 후 `git switch -c agent/<topic> main`으로 브랜치를 딴다.
 CodeGraph는 worktree마다 1회 `codegraph init -i`로 초기화하고 이후에는 `codegraph sync`를 실행한다. `.codegraph/`는 gitignore 대상이다.
 
 ## 로컬 개발 환경

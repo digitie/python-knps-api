@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypeAlias
+from typing import Any, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict
 
@@ -189,6 +189,52 @@ class GeoFeature(KnpsModel):
             "geometry": None if self.geometry is None else self.geometry.as_geojson,
             "properties": dict(self.properties),
         }
+
+
+class KnpsPlaceRecord(KnpsModel):
+    """KNPS point CSV 한 행을 정규화한 typed record.
+
+    heterogeneous한 KNPS CSV header(코드 임베디드/순한글)를 공통 필드로 정규화한
+    결과다. downstream(예: ``python-krtour-map``)이 header를 best-guess하지 않고
+    바로 소비할 수 있도록 ``knps.records``의 normalizer가 채운다. 좌표는 원본 CSV
+    그대로의 WGS84 경위도(예: 127.x/36.x)다 — live 샘플에서 확인했다.
+
+    원본 header→value 매핑 전체는 ``raw``에 손실 없이 보존한다(원본 header 문자열을
+    key로 사용). ``raw``는 dict이므로 ``KnpsModel``의 frozen이 attribute 재할당만
+    막고 dict 내부 mutation은 허용한다(다른 immutable 필드와 달리 의도된 trade-off).
+    """
+
+    dataset_key: str
+    source_id: str
+    name: str | None = None
+    name_en: str | None = None
+    longitude: float | None = None
+    latitude: float | None = None
+    road_address: str | None = None
+    jibun_address: str | None = None
+    tel: str | None = None
+    elevation: float | None = None
+    raw: dict[str, str | None] = {}
+
+
+class KnpsGeoRecord(KnpsModel):
+    """KNPS geometry feature 한 건을 정규화한 typed record.
+
+    :class:`KnpsPlaceRecord`와 같은 normalizer로 속성을 정규화하되, geometry를
+    WKT 문자열(``geom_wkt``)로 보존하고 가능하면 대표점(centroid) 경위도를 채운다.
+    ``geom_wkt`` 좌표계는 추출 시점의 ``GeoFeatureCollection.crs``(기본 WGS84)를
+    따른다.
+    """
+
+    dataset_key: str
+    source_id: str
+    name: str | None = None
+    name_en: str | None = None
+    geom_wkt: str
+    longitude: float | None = None
+    latitude: float | None = None
+    road_address: str | None = None
+    raw: dict[str, Any] = {}
 
 
 class GeoFeatureCollection(KnpsModel):

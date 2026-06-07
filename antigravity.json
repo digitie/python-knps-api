@@ -25,7 +25,7 @@
         "serve",
         "--mcp"
       ],
-      "cwd": "F:\\dev\\knps-antigravity"
+      "cwd": "F:\\dev\\python-knps-api-antigravity"
     }
   }
 }
