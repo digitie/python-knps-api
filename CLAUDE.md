@@ -9,17 +9,16 @@
 국립공원공단(KNPS) 오픈 API 및 파일 기반 공간데이터를 제공하는 Python Client 및 Catalog 라이브러리.
 현재 `feat/style-and-mcp-settings` 작업을 통해 `maplibre-vworld-js` 프로젝트의 스타일 가이드와 AI 에이전트 협업 환경(MCP 및 에이전트별 고정 worktree)을 이식하고 적용했다.
 
-### 현재 작업
-
-- `feat/style-and-mcp-settings`: `maplibre-vworld-js` 프로젝트 스타일 및 MCP 설정을 가져와서 적용 및 리모트 푸시 완료 중.
+- `feat/style-and-mcp-settings`: 스타일 및 MCP 설정 이식 완료.
+- `agent/antigravity`: T-002(공간데이터 파싱) 및 T-003(Live API 및 ID/URL 검증) 완료. 로컬 Git에서 서비스키(`22f6c708dbafcf5d94cb0479334665aa1759c770c177c30559f8e2a1a70c296a`)를 성공적으로 추출하여 15개 Live 테스트 전체 통과 확인.
 
 ### 잔존 기술 부채
 
-- (없음 — 발견 시 `docs/tasks.md`에 T-NNN으로 등록)
+- (없음)
 
 ### 브랜치 정리
 
-- `feat/style-and-mcp-settings` — 현재 작업 중인 브랜치. 스타일 및 MCP 설정 적용 후 main에 머지 예정.
+- `agent/antigravity` — 현재 작업 브랜치. T-002, T-003 검증 완료 상태.
 
 ## 에이전트 worktree + CodeGraph
 

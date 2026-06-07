@@ -65,3 +65,7 @@ class KnpsServerError(KnpsApiError):
 
 class KnpsParseError(KnpsApiError):
     """원격 응답을 파싱할 수 없을 때의 오류."""
+
+
+class KnpsStorageError(KnpsApiError):
+    """객체 저장소(S3/RustFS) 또는 로컬 스토리지 입출력 실패 시의 오류."""

@@ -13,6 +13,7 @@ from .exceptions import (
     KnpsRateLimitError,
     KnpsRequestError,
     KnpsServerError,
+    KnpsStorageError,
 )
 from .geometry import extract_geometries, parse_wkt
 from .models import (
@@ -49,6 +50,7 @@ __all__ = [
     "KnpsRateLimitError",
     "KnpsRequestError",
     "KnpsServerError",
+    "KnpsStorageError",
     "catalog_entries",
     "extract_geometries",
     "file_dataset",
