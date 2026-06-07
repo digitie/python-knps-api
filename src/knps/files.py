@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
+import urllib.parse
+from pathlib import Path
 from typing import Protocol, cast
+
+import boto3
 
 from .artifacts import read_all_csv_rows, read_file_artifact
 from .catalog import file_dataset, file_datasets
-from .exceptions import KnpsRequestError
+from .config import KnpsConfig
+from .exceptions import KnpsRequestError, KnpsStorageError
 from .geometry import WGS84, extract_geometries
 from .models import (
     FileArtifact,
@@ -38,6 +45,7 @@ class _DownloadHttp(Protocol):
 
 class _FileClient(Protocol):
     _http: _DownloadHttp
+    config: KnpsConfig
 
 
 class FileDataNamespace:
@@ -168,6 +176,105 @@ class FileDataNamespace:
             target_crs=target_crs,
             max_features=max_features,
         )
+
+    async def download_to_rustfs(
+        self,
+        key: str,
+        local_path: str | Path,
+        *,
+        object_key: str | None = None,
+        overwrite_local: bool = True,
+        max_bytes: int | None = None,
+    ) -> str:
+        """검증된 직접 다운로드 URL에서 파일 bytes를 다운로드하여 로컬에 저장하고,
+        S3 호환 객체 저장소(RustFS)에도 동시에 저장합니다.
+
+        S3(RustFS) 업로드 성공 후 최종 저장된 object_key를 반환합니다.
+        """
+        # 1. 데이터셋 다운로드
+        dataset = file_dataset(key)
+        data = await self._fetch_dataset_bytes(dataset, max_bytes=max_bytes)
+
+        # 2. 로컬 저장
+        path = Path(local_path)
+        if path.exists() and not overwrite_local:
+            raise KnpsStorageError(
+                f"Local file already exists at {path} and overwrite_local is False",
+                provider="local",
+                endpoint=key,
+                failure_kind="local_write",
+            )
+
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(path.write_bytes, data)
+        except Exception as exc:
+            raise KnpsStorageError(
+                f"Failed to write local file at {path}: {exc}",
+                provider="local",
+                endpoint=key,
+                failure_kind="local_write",
+            ) from exc
+
+        # 3. RustFS(S3) 설정 확인 및 클라이언트 초기화
+        config = self._client.config
+        if not config.rustfs_endpoint_url:
+            raise KnpsStorageError(
+                "RustFS endpoint URL is not configured.",
+                provider="rustfs",
+                endpoint=key,
+                failure_kind="config",
+            )
+
+        try:
+            s3_client = boto3.client(
+                "s3",
+                endpoint_url=config.rustfs_endpoint_url,
+                aws_access_key_id=config.rustfs_access_key,
+                aws_secret_access_key=config.rustfs_secret_key,
+                region_name=config.rustfs_region,
+            )
+        except Exception as exc:
+            raise KnpsStorageError(
+                f"Failed to initialize boto3 S3 client: {exc}",
+                provider="rustfs",
+                endpoint=key,
+                failure_kind="client_init",
+            ) from exc
+
+        # 4. object_key 결정
+        if not object_key:
+            parsed = urllib.parse.urlparse(dataset.download_url or "")
+            filename = os.path.basename(parsed.path)
+            if not filename:
+                filename = f"{key}.dat"
+            object_key = f"datasets/{key}/{filename}"
+
+        # 5. RustFS(S3) 업로드
+        try:
+            import mimetypes
+
+            content_type, _ = mimetypes.guess_type(object_key)
+            if not content_type:
+                content_type = "application/octet-stream"
+
+            await asyncio.to_thread(
+                s3_client.put_object,
+                Bucket=config.rustfs_bucket or "knps",
+                Key=object_key,
+                Body=data,
+                ContentType=content_type,
+            )
+        except Exception as exc:
+            raise KnpsStorageError(
+                f"Failed to upload data to RustFS (bucket: {config.rustfs_bucket}, "
+                f"key: {object_key}): {exc}",
+                provider="rustfs",
+                endpoint=key,
+                failure_kind="upload",
+            ) from exc
+
+        return object_key
 
     async def read_place_records(
         self,

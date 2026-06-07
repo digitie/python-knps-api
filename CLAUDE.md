@@ -7,19 +7,17 @@
 ## 프로젝트 현황 (2026-05-31)
 
 국립공원공단(KNPS) 오픈 API 및 파일 기반 공간데이터를 제공하는 Python Client 및 Catalog 라이브러리.
-현재 `feat/prefix-worktrees` 작업을 통해 `maplibre-vworld-js` 프로젝트의 스타일 가이드와 AI 에이전트 협업 환경(MCP 및 에이전트별 고정 worktree)을 이식하고 적용했다.
-
-### 현재 작업
-
-- `feat/prefix-worktrees`: 워크트리 prefix를 `python-knps-api-*`로 바꾸고 에이전트별 git worktree 생성 및 codegraph init 연동 중.
+- `feat/prefix-worktrees`: 워크트리 prefix를 `python-knps-api-*`로 변경 완료.
+- `agent/antigravity`: T-004(RustFS 연동 및 로컬 이중 저장) 완료. 로컬 및 Live 테스트 100% 통과 확인.
 
 ### 잔존 기술 부채
 
-- (없음 — 발견 시 `docs/tasks.md`에 T-NNN으로 등록)
+- (없음)
 
 ### 브랜치 정리
 
-- `feat/prefix-worktrees` — 현재 작업 중인 브랜치. 워크트리 prefix 및 생성 작업 후 main에 머지 예정.
+- `main` — 머지 완료 및 최신 상태.
+- `agent/antigravity` — RustFS 연동 완료 상태.
 
 ## 에이전트 worktree + CodeGraph
 

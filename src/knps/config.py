@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 DEFAULT_TIMEOUT = 10.0
@@ -14,6 +15,11 @@ class KnpsConfig:
 
     timeout: float = DEFAULT_TIMEOUT
     max_rps: float = DEFAULT_MAX_RPS
+    rustfs_endpoint_url: str | None = None
+    rustfs_bucket: str | None = None
+    rustfs_access_key: str | None = None
+    rustfs_secret_key: str | None = None
+    rustfs_region: str = "us-east-1"
 
     @classmethod
     def from_env(
@@ -21,10 +27,51 @@ class KnpsConfig:
         *,
         timeout: float | str | None = None,
         max_rps: float | str | None = None,
+        rustfs_endpoint_url: str | None = None,
+        rustfs_bucket: str | None = None,
+        rustfs_access_key: str | None = None,
+        rustfs_secret_key: str | None = None,
+        rustfs_region: str | None = None,
     ) -> KnpsConfig:
         return cls(
             timeout=_resolve_positive_float(timeout, default=DEFAULT_TIMEOUT, field_name="timeout"),
             max_rps=_resolve_positive_float(max_rps, default=DEFAULT_MAX_RPS, field_name="max_rps"),
+            rustfs_endpoint_url=(
+                rustfs_endpoint_url
+                or os.environ.get("KNPS_RUSTFS_ENDPOINT_URL")
+                or os.environ.get("RUSTFS_ENDPOINT_URL")
+                or os.environ.get("KRTOUR_MAP_OBJECT_STORE_ENDPOINT_URL")
+            ),
+            rustfs_bucket=(
+                rustfs_bucket
+                or os.environ.get("KNPS_RUSTFS_BUCKET")
+                or os.environ.get("RUSTFS_BUCKET")
+                or os.environ.get("KRTOUR_MAP_OBJECT_STORE_BUCKET")
+                or "knps"
+            ),
+            rustfs_access_key=(
+                rustfs_access_key
+                or os.environ.get("KNPS_RUSTFS_ACCESS_KEY")
+                or os.environ.get("RUSTFS_ACCESS_KEY")
+                or os.environ.get("KNPS_RUSTFS_ACCESS_KEY_ID")
+                or os.environ.get("RUSTFS_ACCESS_KEY_ID")
+                or os.environ.get("KRTOUR_MAP_OBJECT_STORE_ACCESS_KEY_ID")
+            ),
+            rustfs_secret_key=(
+                rustfs_secret_key
+                or os.environ.get("KNPS_RUSTFS_SECRET_KEY")
+                or os.environ.get("RUSTFS_SECRET_KEY")
+                or os.environ.get("KNPS_RUSTFS_SECRET_ACCESS_KEY")
+                or os.environ.get("RUSTFS_SECRET_ACCESS_KEY")
+                or os.environ.get("KRTOUR_MAP_OBJECT_STORE_SECRET_ACCESS_KEY")
+            ),
+            rustfs_region=(
+                rustfs_region
+                or os.environ.get("KNPS_RUSTFS_REGION")
+                or os.environ.get("RUSTFS_REGION")
+                or os.environ.get("KRTOUR_MAP_OBJECT_STORE_REGION")
+                or "us-east-1"
+            ),
         )
 
 
