@@ -27,7 +27,16 @@ from .models import (
 WGS84 = "EPSG:4326"
 
 # CSV에서 geometry를 담는 컬럼 후보. lowercase/strip 후 비교한다.
-_WKT_HEADERS = ("wkt", "geom", "geometry", "the_geom", "shape", "geom_wkt", "wkt_geom")
+_WKT_HEADERS = (
+    "wkt",
+    "geom",
+    "geometry",
+    "the_geom",
+    "shape",
+    "geom_wkt",
+    "wkt_geom",
+    "gis위치",  # KNPS hazard_zones CSV: POINT(...) WKT를 담는 컬럼
+)
 _LON_HEADERS = ("lon", "lng", "long", "longitude", "x", "경도", "tm_x", "gis_x", "x좌표")
 _LAT_HEADERS = ("lat", "latitude", "y", "위도", "tm_y", "gis_y", "y좌표")
 

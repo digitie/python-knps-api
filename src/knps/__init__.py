@@ -25,6 +25,14 @@ from .models import (
     GeoFeature,
     GeoFeatureCollection,
     Geometry,
+    KnpsGeoRecord,
+    KnpsPlaceRecord,
+)
+from .records import (
+    geometry_to_wkt,
+    normalize_geo_record,
+    normalize_place_record,
+    representative_point,
 )
 
 PROVIDER_NAME = "python-knps-api"
@@ -44,8 +52,10 @@ __all__ = [
     "KnpsAuthError",
     "KnpsClient",
     "KnpsConfig",
+    "KnpsGeoRecord",
     "KnpsNoDataError",
     "KnpsParseError",
+    "KnpsPlaceRecord",
     "KnpsRateLimitError",
     "KnpsRequestError",
     "KnpsServerError",
@@ -53,5 +63,9 @@ __all__ = [
     "extract_geometries",
     "file_dataset",
     "file_datasets",
+    "geometry_to_wkt",
+    "normalize_geo_record",
+    "normalize_place_record",
     "parse_wkt",
+    "representative_point",
 ]

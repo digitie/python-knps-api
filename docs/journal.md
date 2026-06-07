@@ -2,6 +2,17 @@
 
 이 문서는 `python-knps-api` 프로젝트의 개발 기록과 주요 기술적 결정을 역시간순으로 관리한다.
 
+## 2026-06-07
+- **작업**: 파일 dataset typed·정규화 record API 추가 (`feat/typed-file-records`)
+- **내용**:
+  - 모든 direct-download dataset을 실제로 내려받아 header schema를 검증하고(3종 변종: 표준 point 코드 임베디드, weather_stations 별도 코드, trails 순한글), 그 결과로 `knps.records` normalizer를 작성했다.
+  - `KnpsPlaceRecord` / `KnpsGeoRecord` typed model을 `models.py`에 추가하고 `__init__` `__all__`에 export.
+  - normalizer는 header의 `(영문코드)` 접미사를 우선 추출(대소문자 무시)하고, 코드가 없으면 순한글 header로 fallback한다. `(한글)`/`(영문)` 같은 순한글 괄호는 코드로 오인하지 않는다. source_id는 `ID_CD`(국립공원관리번호)를 최우선으로 하고, 없으면 행 해시(`row:...`)로 결정적 fallback.
+  - `files.py`에 `read_place_records`(첫 CSV member 전체 행 정규화)와 `read_geo_records`(geometry→WKT + 속성 정규화 + 대표점) async 메서드 추가. `artifacts.read_all_csv_rows`로 preview cap 없는 전체 행 reader를 분리.
+  - geometry.py의 WKT 컬럼 후보에 `gis위치` 추가(hazard_zones CSV의 POINT WKT 컬럼 감지).
+  - 실제 header fixture 단위 테스트 + skip-by-default live 테스트 추가. ruff/mypy/pytest all green. live-verify로 visitor_centers/weather_stations/trails/hazard_zones/park_boundaries 정규화 결과 확인. version 0.1.0 → 0.2.0.
+- **다음 작업**: downstream `python-krtour-map`이 `read_place_records`/`read_geo_records`를 소비하도록 ETL 연결(별도 작업).
+
 ## 2026-05-31
 - **작업**: 워크트리 prefix 변경(python-knps-api-*) 및 에이전트별 worktree 생성과 codegraph init
 - **내용**: 
