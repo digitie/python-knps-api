@@ -111,6 +111,54 @@ def _read_csv_preview(
     )
 
 
+def read_all_csv_rows(data: bytes) -> tuple[str | None, list[dict[str, str | None]]]:
+    """다운로드 bytes에서 **첫 번째 CSV member의 모든 행**을 읽는다.
+
+    preview처럼 행 수를 제한하지 않고 전부 읽어서, header→value 순서 보존
+    매핑(dict)의 list로 돌려준다. ZIP이면 처음 발견되는 CSV/TXT member 하나만
+    읽는다(KNPS ZIP은 보통 CSV 1개 + SHP/HWP 부속 파일 구성이며, 간혹 중복
+    사본 CSV가 들어 있어 모두 읽으면 행이 중복되므로 첫 member로 한정한다).
+
+    반환값은 ``(member_name, rows)``. CSV를 찾지 못하면 ``(None, [])``.
+    header보다 짧은 행은 ``None``으로 패딩, 긴 행의 trailing 값은
+    ``__extra_{n}__`` key로 보존한다.
+    """
+
+    if zipfile.is_zipfile(io.BytesIO(data)):
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            for info in archive.infolist():
+                if info.is_dir():
+                    continue
+                name = _decode_zip_member_name(info)
+                if name.lower().endswith(CSV_SUFFIXES):
+                    return name, _read_all_csv_rows_bytes(archive.read(info))
+        return None, []
+    return None, _read_all_csv_rows_bytes(data)
+
+
+def _read_all_csv_rows_bytes(data: bytes) -> list[dict[str, str | None]]:
+    decoded = _decode_text(data)
+    if decoded is None:
+        return []
+    text, _encoding = decoded
+    if not text:
+        return []
+    rows = list(csv.reader(io.StringIO(text)))
+    if not rows or len(rows[0]) < 1:
+        return []
+    headers = [_clean_header(header, index) for index, header in enumerate(rows[0])]
+    header_count = len(headers)
+    records: list[dict[str, str | None]] = []
+    for raw_row in rows[1:]:
+        record: dict[str, str | None] = {}
+        for index, header in enumerate(headers):
+            record[header] = raw_row[index] if index < len(raw_row) else None
+        for extra_index, value in enumerate(raw_row[header_count:]):
+            record[f"__extra_{extra_index + 1}__"] = value
+        records.append(record)
+    return records
+
+
 def _decode_text(data: bytes) -> tuple[str, str] | None:
     for encoding in TEXT_ENCODINGS:
         try:

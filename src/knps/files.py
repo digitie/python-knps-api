@@ -4,11 +4,23 @@ from __future__ import annotations
 
 from typing import Protocol, cast
 
-from .artifacts import read_file_artifact
+from .artifacts import read_all_csv_rows, read_file_artifact
 from .catalog import file_dataset, file_datasets
 from .exceptions import KnpsRequestError
 from .geometry import WGS84, extract_geometries
-from .models import FileArtifact, FileDataset, GeoFeatureCollection
+from .models import (
+    FileArtifact,
+    FileDataset,
+    GeoFeatureCollection,
+    KnpsGeoRecord,
+    KnpsPlaceRecord,
+)
+from .records import (
+    geometry_to_wkt,
+    normalize_geo_record,
+    normalize_place_record,
+    representative_point,
+)
 
 _DEFAULT_PREVIEW_ROWS = 5
 
@@ -156,3 +168,60 @@ class FileDataNamespace:
             target_crs=target_crs,
             max_features=max_features,
         )
+
+    async def read_place_records(
+        self,
+        key: str,
+        *,
+        max_bytes: int | None = None,
+    ) -> tuple[KnpsPlaceRecord, ...]:
+        """point CSV dataset을 다운로드해 typed :class:`KnpsPlaceRecord`로 정규화한다.
+
+        preview가 아니라 첫 CSV member의 **모든 행**을 읽는다. 행 단위로
+        :func:`knps.records.normalize_place_record`가 코드 우선 → 순한글 fallback
+        으로 필드를 추출하며, 실제 식별자가 없는 행도 버리지 않고 행 해시
+        ``source_id``로 보존한다.
+        """
+
+        dataset = file_dataset(key)
+        data = await self._fetch_dataset_bytes(dataset, max_bytes=max_bytes)
+        _member, rows = read_all_csv_rows(data)
+        return tuple(normalize_place_record(dataset.key, row) for row in rows)
+
+    async def read_geo_records(
+        self,
+        key: str,
+        *,
+        source_crs: str | None = None,
+        target_crs: str | None = WGS84,
+        max_features: int | None = None,
+        max_bytes: int | None = None,
+    ) -> tuple[KnpsGeoRecord, ...]:
+        """공간 dataset을 다운로드해 typed :class:`KnpsGeoRecord`로 정규화한다.
+
+        :meth:`download_geometries`로 geometry feature를 추출한 뒤 각 feature의
+        geometry를 WKT로 변환하고 속성을 정규화한다. geometry가 없는 feature는
+        ``geom_wkt``를 만들 수 없으므로 건너뛴다. SHP polygon dataset은 ``geo``
+        extra(``pyshp``/``pyproj``)가 없으면 :class:`KnpsParseError`가 난다.
+        """
+
+        collection = await self.download_geometries(
+            key,
+            source_crs=source_crs,
+            target_crs=target_crs,
+            max_features=max_features,
+            max_bytes=max_bytes,
+        )
+        records: list[KnpsGeoRecord] = []
+        for feature in collection.features:
+            if feature.geometry is None:
+                continue
+            records.append(
+                normalize_geo_record(
+                    collection.dataset_key,
+                    geometry_to_wkt(feature.geometry),
+                    feature.as_dict,
+                    centroid=representative_point(feature.geometry),
+                )
+            )
+        return tuple(records)
