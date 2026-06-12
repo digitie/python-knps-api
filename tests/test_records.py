@@ -265,3 +265,62 @@ def test_read_all_csv_rows_pads_short_rows_with_none() -> None:
     _member, rows = read_all_csv_rows(payload)
 
     assert rows[0] == {"이름": "지리산", "경도": None, "위도": None}
+
+
+# --- trails vertex → LINESTRING 조립 (#9) -------------------------------------
+
+
+def _vertex_record(source_id: str, name: str, lon: float, lat: float):
+    from knps.models import KnpsGeoRecord
+
+    return KnpsGeoRecord(
+        dataset_key="knps_trails",
+        source_id=source_id,
+        name=name,
+        geom_wkt=f"POINT ({lon} {lat})",
+        longitude=lon,
+        latitude=lat,
+        raw={"국립공원관리번호": source_id, "탐방코스(한글)": name},
+    )
+
+
+def test_assemble_line_records_groups_vertices_per_course() -> None:
+    """vertex POINT 행을 source_id 코스 단위 LINESTRING으로 등장 순서대로 조립한다."""
+    from knps.files import _assemble_line_records
+
+    records = [
+        _vertex_record("A", "수통골 2코스", 127.1, 36.1),
+        _vertex_record("A", "수통골 2코스", 127.2, 36.2),
+        _vertex_record("B", "도덕봉 코스", 127.5, 36.5),
+        _vertex_record("A", "수통골 2코스", 127.3, 36.3),  # 비인접 vertex도 병합
+        _vertex_record("B", "도덕봉 코스", 127.6, 36.6),
+    ]
+    assembled = _assemble_line_records(records)
+
+    assert [r.source_id for r in assembled] == ["A", "B"]  # 첫 등장 순서 유지
+    course_a = assembled[0]
+    assert course_a.geom_wkt == "LINESTRING (127.1 36.1, 127.2 36.2, 127.3 36.3)"
+    assert course_a.name == "수통골 2코스"
+    assert course_a.longitude == 127.1  # 대표점 = 첫 vertex
+    assert assembled[1].geom_wkt == "LINESTRING (127.5 36.5, 127.6 36.6)"
+
+
+def test_assemble_line_records_skips_single_vertex_and_passes_through_lines() -> None:
+    """vertex 1개 코스는 LINESTRING 불가라 skip, 이미 line인 record는 통과."""
+    from knps.files import _assemble_line_records
+    from knps.models import KnpsGeoRecord
+
+    existing_line = KnpsGeoRecord(
+        dataset_key="knps_trails",
+        source_id="C",
+        geom_wkt="LINESTRING (127.0 36.0, 127.1 36.1)",
+        raw={},
+    )
+    records = [
+        existing_line,
+        _vertex_record("D", "한 점 코스", 127.9, 36.9),
+    ]
+    assembled = _assemble_line_records(records)
+
+    assert [r.source_id for r in assembled] == ["C"]
+    assert assembled[0].geom_wkt == "LINESTRING (127.0 36.0, 127.1 36.1)"

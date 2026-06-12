@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import urllib.parse
 from pathlib import Path
 from typing import Protocol, cast
@@ -30,6 +31,50 @@ from .records import (
 )
 
 _DEFAULT_PREVIEW_ROWS = 5
+
+_LINE_GEOMETRY_TYPES = frozenset({"LineString", "MultiLineString"})
+
+# vertex 행이 만든 ``POINT (x y)`` WKT에서 좌표 추출 (#9 — trails 조립용).
+_POINT_WKT = re.compile(
+    r"^POINT\s*\(\s*([-+0-9.eE]+)\s+([-+0-9.eE]+)\s*\)$"
+)
+
+
+def _assemble_line_records(
+    records: list[KnpsGeoRecord],
+) -> tuple[KnpsGeoRecord, ...]:
+    """vertex 단위 POINT record들을 ``source_id`` 코스 단위 LINESTRING으로 조립한다.
+
+    trails류 CSV(#9)는 한 코스가 수천 vertex 행으로 펼쳐져 내려온다 —
+    같은 ``source_id``의 POINT들을 파일 등장 순서대로 이어 코스당 1개
+    ``LINESTRING`` record로 만든다(속성/raw는 첫 vertex 행, 대표점은 첫
+    vertex). POINT가 아닌 record(이미 line geometry)는 그대로 통과하고,
+    vertex가 2개 미만인 코스는 LINESTRING을 만들 수 없어 건너뛴다.
+    """
+
+    order: list[str] = []
+    vertices: dict[str, list[tuple[str, str]]] = {}
+    first: dict[str, KnpsGeoRecord] = {}
+    passthrough: list[KnpsGeoRecord] = []
+    for record in records:
+        match = _POINT_WKT.match(record.geom_wkt)
+        if match is None:
+            passthrough.append(record)
+            continue
+        if record.source_id not in vertices:
+            order.append(record.source_id)
+            vertices[record.source_id] = []
+            first[record.source_id] = record
+        vertices[record.source_id].append((match.group(1), match.group(2)))
+
+    assembled: list[KnpsGeoRecord] = []
+    for source_id in order:
+        points = vertices[source_id]
+        if len(points) < 2:
+            continue
+        wkt = "LINESTRING (" + ", ".join(f"{x} {y}" for x, y in points) + ")"
+        assembled.append(first[source_id].model_copy(update={"geom_wkt": wkt}))
+    return tuple(passthrough + assembled)
 
 
 class _DownloadHttp(Protocol):
@@ -331,4 +376,10 @@ class FileDataNamespace:
                     centroid=representative_point(feature.geometry),
                 )
             )
+        dataset = file_dataset(key)
+        if dataset.geometry_type in _LINE_GEOMETRY_TYPES:
+            # trails류 CSV는 코스별 vertex 단위 행이라 행=POINT record가 된다
+            # (#9 — knps_trails 실측 910,110 vertex 행). 카탈로그가 선언한
+            # geometry 계약(LineString)에 맞게 source_id 단위로 조립한다.
+            return _assemble_line_records(records)
         return tuple(records)
