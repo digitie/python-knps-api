@@ -2,6 +2,20 @@
 
 이 문서는 `python-knps-api` 프로젝트의 개발 기록과 주요 기술적 결정을 역시간순으로 관리한다.
 
+## 2026-06-12
+- **작업**: #9 — `knps_trails` vertex 행을 코스 단위 LINESTRING으로 조립
+- **내용**:
+  - krtour-map T-212e live 적재에서 `read_geo_records("knps_trails")`가
+    910,110개 **vertex 단위 POINT record**를 반환(코스당 수천 행) —
+    카탈로그가 선언한 geometry 계약(`LineString`)과 불일치, downstream
+    route 변환이 전 행 skip(krtour-map#407).
+  - `read_geo_records`에 라인형 dataset 분기(`_LINE_GEOMETRY_TYPES`) +
+    `_assemble_line_records` 추가: 같은 `source_id`의 POINT vertex를 파일
+    등장 순서대로 이어 코스당 1개 `LINESTRING` record로 조립(속성/raw는 첫
+    vertex 행, 대표점=첫 vertex, 2점 미만 코스 skip, 비-POINT record 통과).
+  - live 종단 검증: 910,110 vertex → **625 코스 LINESTRING**(수통골 2코스 등).
+  - 단위 테스트 2종(코스 그루핑/등장순서/비인접 병합, 1점 skip·line 통과).
+
 ## 2026-06-07
 - **작업**: T-004 RustFS(S3 호환) 연동 및 로컬 이중 저장 구현
 - **내용**:
