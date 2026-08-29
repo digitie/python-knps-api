@@ -20,7 +20,7 @@
 | Geometry 추출 | `await client.files.download_geometries(key, ...)` | SHP/CSV를 `GeoFeatureCollection`으로 추출하고 WGS84로 재투영(`geo` extra 필요) |
 | Typed·정규화 record | `await client.files.read_place_records(key)` / `read_geo_records(key)` | heterogeneous CSV header를 공통 필드로 정규화한 `KnpsPlaceRecord`/`KnpsGeoRecord` 반환 |
 | RustFS(S3 호환) 이중 저장 | `await client.files.download_to_rustfs(key, ...)` | 로컬 저장과 동시에 S3 호환 저장소에 적재(ADR-004) |
-| Debug UI | `streamlit run debug_ui/app.py` | KNPS file dataset catalog를 Metadata/Catalog/Fixture 탭으로 확인 |
+| Debug UI | `streamlit run examples/streamlit_debug_ui.py` | dataset 선택 후 실제 download/geometry/RustFS 오퍼레이션을 실행하고 Raw Response/Pydantic Model/Processed Result/Validation Errors/Debug Trace/Fixture 6탭으로 검토 |
 
 ## 먼저 읽을 문서
 
@@ -62,7 +62,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-KNPS는 data.go.kr에서 확인된 provider catalog가 파일데이터 중심이며, 현재 이 라이브러리의 OpenAPI catalog는 제공하지 않는다. SHP/CSV parser는 `docs/knps-feature-etl.md`의 dataset별 변환 규칙에 맞춰 확장한다. Debug UI는 `pip install -e ".[debug-ui]"` 후 `streamlit run debug_ui/app.py`로 실행한다.
+KNPS는 data.go.kr에서 확인된 provider catalog가 파일데이터 중심이며, 현재 이 라이브러리의 OpenAPI catalog는 제공하지 않는다. SHP/CSV parser는 `docs/knps-feature-etl.md`의 dataset별 변환 규칙에 맞춰 확장한다. Debug UI는 `pip install -e ".[debug-ui]"` 후 `streamlit run examples/streamlit_debug_ui.py`로 실행한다(이 저장소는 파일 카탈로그라 서비스키가 필요 없다).
 
 ## 예제: Typed·정규화 record
 
@@ -99,10 +99,10 @@ Curated scope는 data.go.kr의 국립공원공단 공개 데이터, `python-krto
 
 | 경로 | 설명 |
 |------|------|
-| `src/knps/` | `knps` 패키지 소스(`client`, `catalog`, `files`, `geometry`, `records`, `config`, `exceptions`) |
+| `src/knps/` | `knps` 패키지 소스(`client`, `catalog`, `files`, `geometry`, `records`, `config`, `exceptions`, `debug`) |
 | `tests/` | pytest 기반 단위/live 테스트 |
 | `docs/` | 설계 문서, ADR, 태스크, 일지 |
-| `debug_ui/` | Streamlit 기반 디버그 UI(`app.py`) |
+| `examples/streamlit_debug_ui.py` | Streamlit 기반 디버그 UI(`debug-ui` extra 필요) |
 | `.github/workflows/` | CI(lint/typecheck/test) |
 
 ## 문서/기여 규칙

@@ -2,15 +2,197 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
+
 from .exceptions import KnpsRequestError
+from .geometry import WGS84
 from .models import CatalogEntry, Category, FileDataset
 
 DATA_GO_BASE = "https://www.data.go.kr/data"
 DATA_GO_DOWNLOAD_BASE = "https://www.data.go.kr/cmm/cmm/fileDownload.do"
 
+OperationParamKind = Literal["str", "int", "bool"]
+
+_POINT_GEOMETRY_TYPES = frozenset({"Point", "MultiPoint"})
+
 
 def _download_url(file_id: str) -> str:
     return f"{DATA_GO_DOWNLOAD_BASE}?atchFileId={file_id}&fileDetailSn=1&insertDataPrcus=N"
+
+
+@dataclass(frozen=True, slots=True)
+class OperationParam:
+    """디버그 UI가 오퍼레이션 위젯을 자동 생성하기 위한 파라미터 명세.
+
+    ``default``가 ``{dataset_key}`` 토큰을 포함하면 호출부가 선택된
+    dataset의 key로 채워 넣는다(예: ``download_to_rustfs``의 ``local_path``).
+    """
+
+    name: str
+    kind: OperationParamKind
+    required: bool = False
+    default: str = ""
+    help: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetOperation:
+    """``KnpsClient.files``의 실제 메서드 하나에 대응하는 디버그 UI 오퍼레이션.
+
+    ``key``는 항상 :class:`~knps.files.FileDataNamespace`의 메서드 이름과
+    같다 — 디버그 UI는 이 값으로 ``getattr(client.files, key)``를 호출해서
+    라우팅하므로, 데이터셋/오퍼레이션 이름별 ``if`` 분기가 필요 없다.
+    """
+
+    key: str
+    label: str
+    description: str
+    params: tuple[OperationParam, ...] = ()
+
+
+def dataset_operations(dataset: FileDataset) -> tuple[DatasetOperation, ...]:
+    """이 dataset에 실행 가능한 :class:`DatasetOperation` 목록을 반환한다.
+
+    검증된 ``download_url``이 없으면(``needs_verification`` 등) 빈 tuple을
+    돌려준다 — ADR-002에 따라 미검증 dataset은 다운로드를 시도하지 않는다.
+    나머지는 ``geometry_type`` 유무로 spatial 전용 오퍼레이션을 켠다.
+    """
+
+    if not dataset.direct_download or not dataset.download_url:
+        return ()
+
+    operations: list[DatasetOperation] = [
+        DatasetOperation(
+            key="download_artifact",
+            label="Download + inspect (raw bytes, CSV/ZIP preview)",
+            description="파일을 다운로드하고 구조(ZIP member/CSV header)와 앞부분 행을 미리본다.",
+            params=(
+                OperationParam(
+                    "preview_rows",
+                    "int",
+                    default="5",
+                    help="CSV preview에 포함할 행 수.",
+                ),
+                OperationParam(
+                    "max_bytes",
+                    "int",
+                    help="다운로드를 자를 최대 byte 수(선택, 비우면 전체 다운로드).",
+                ),
+            ),
+        ),
+    ]
+
+    if dataset.geometry_type is not None:
+        operations.append(
+            DatasetOperation(
+                key="download_geometries",
+                label="Extract geometries (GeoFeatureCollection)",
+                description="SHP/CSV에서 geometry feature를 추출한다(선택적으로 좌표 재투영).",
+                params=(
+                    OperationParam(
+                        "source_crs",
+                        "str",
+                        help="원본 좌표계 EPSG 코드(선택, 예: EPSG:5179). 비우면 .prj에서 감지.",
+                    ),
+                    OperationParam(
+                        "target_crs",
+                        "str",
+                        default=WGS84,
+                        help="목표 좌표계(기본 WGS84).",
+                    ),
+                    OperationParam(
+                        "max_features",
+                        "int",
+                        help="추출할 최대 feature 수(선택).",
+                    ),
+                    OperationParam(
+                        "max_bytes",
+                        "int",
+                        help="다운로드를 자를 최대 byte 수(선택).",
+                    ),
+                ),
+            )
+        )
+        operations.append(
+            DatasetOperation(
+                key="read_geo_records",
+                label="Normalize to KnpsGeoRecord rows",
+                description="geometry feature를 WKT + 정규화 속성의 typed record로 변환한다.",
+                params=(
+                    OperationParam(
+                        "source_crs",
+                        "str",
+                        help="원본 좌표계 EPSG 코드(선택, 예: EPSG:5179).",
+                    ),
+                    OperationParam(
+                        "target_crs",
+                        "str",
+                        default=WGS84,
+                        help="목표 좌표계(기본 WGS84).",
+                    ),
+                    OperationParam(
+                        "max_features",
+                        "int",
+                        help="추출할 최대 feature 수(선택).",
+                    ),
+                    OperationParam(
+                        "max_bytes",
+                        "int",
+                        help="다운로드를 자를 최대 byte 수(선택).",
+                    ),
+                ),
+            )
+        )
+        if dataset.geometry_type in _POINT_GEOMETRY_TYPES:
+            operations.append(
+                DatasetOperation(
+                    key="read_place_records",
+                    label="Normalize to KnpsPlaceRecord rows",
+                    description="point CSV 전체 행을 typed KnpsPlaceRecord로 정규화한다.",
+                    params=(
+                        OperationParam(
+                            "max_bytes",
+                            "int",
+                            help="다운로드를 자를 최대 byte 수(선택).",
+                        ),
+                    ),
+                )
+            )
+
+    operations.append(
+        DatasetOperation(
+            key="download_to_rustfs",
+            label="Download + save to local file & RustFS",
+            description="파일을 다운로드해 로컬에 저장하고 동시에 RustFS(S3 호환)에 업로드한다.",
+            params=(
+                OperationParam(
+                    "local_path",
+                    "str",
+                    required=True,
+                    default="tests/fixtures/downloads/{dataset_key}.download",
+                    help="로컬 저장 경로.",
+                ),
+                OperationParam(
+                    "object_key",
+                    "str",
+                    help="RustFS object key(선택, 비우면 URL 파일명에서 자동 생성).",
+                ),
+                OperationParam(
+                    "overwrite_local",
+                    "bool",
+                    default="true",
+                    help="로컬 파일이 이미 있으면 덮어쓴다.",
+                ),
+                OperationParam(
+                    "max_bytes",
+                    "int",
+                    help="다운로드를 자를 최대 byte 수(선택).",
+                ),
+            ),
+        )
+    )
+    return tuple(operations)
 
 
 FILE_DATASETS: tuple[FileDataset, ...] = (
