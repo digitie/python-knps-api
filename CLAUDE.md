@@ -1,60 +1,8 @@
-# CLAUDE.md — 프로젝트 컨텍스트
+# CLAUDE.md
 
-이 파일은 AI 에이전트가 매 세션 시작 시 자동으로 읽어 프로젝트 상태를 파악하는 문서다.
-프로젝트 규칙은 `AGENTS.md`에, 아키텍처 의사결정은 `docs/decisions.md`에 있다.
-이 파일은 **현재 상태**와 **세션 간 연속성**에 집중한다.
+정본 문서는 `AGENTS.md`(작업 규칙)와 `README.md`(사용법)다. 구조적 의사결정은
+`docs/decisions.md`, 최근 변경은 `CHANGELOG.md`를 참고한다.
 
-## 프로젝트 현황 (2026-05-31)
-
-국립공원공단(KNPS) 오픈 API 및 파일 기반 공간데이터를 제공하는 Python Client 및 Catalog 라이브러리.
-- `feat/prefix-worktrees`: 워크트리 prefix를 `python-knps-api-*`로 변경 완료.
-- `agent/antigravity`: T-004(RustFS 연동 및 로컬 이중 저장) 완료. 로컬 및 Live 테스트 100% 통과 확인.
-
-### 잔존 기술 부채
-
-- (없음)
-
-### 브랜치 정리
-
-- `main` — 머지 완료 및 최신 상태.
-- `agent/antigravity` — RustFS 연동 완료 상태.
-
-## 에이전트 worktree + CodeGraph
-
-ChatGPT Codex는 `F:\dev\python-knps-api-codex`, Claude Code는 `F:\dev\python-knps-api-claude`, Google Antigravity 2.0은 `F:\dev\python-knps-api-antigravity`를 고정 worktree로 사용한다. 새 작업은 해당 worktree에서 `git fetch` 후 `git switch -c agent/<topic> main`으로 브랜치를 딴다.
-CodeGraph는 worktree마다 1회 `codegraph init -i`로 초기화하고 이후에는 `codegraph sync`를 실행한다. `.codegraph/`는 gitignore 대상이다.
-
-## 로컬 개발 환경
-
-```
-f:\dev\python-knps-api\
-├── src/              # Python 소스 코드
-│   └── knps/         # knps 패키지 디렉토리
-├── tests/            # pytest 기반 테스트 코드
-├── docs/             # 설계 문서, ADR, 태스크 및 일지
-└── pyproject.toml    # Poetry 패키지 설정 및 의존성
-```
-
-Python 3.10+ 및 Poetry 환경.
-`poetry install`을 통해 의존성을 설치하고 로컬 환경을 구성한다.
-
-## 빠른 검증 명령
-
-```bash
-# 의존성 설치
-poetry install
-
-# 품질 게이트 (PR 전 로컬에서 직접 돌린다 — GitHub Actions는 사용하지 않는다)
-poetry run pytest                  # 로컬 유닛 테스트
-poetry run pytest -m live          # Live API 테스트
-poetry run ruff check src tests    # 린터 및 스타일 체크
-poetry run mypy src                # 정적 타입 체크
-```
-
-## 작업 후 의무사항
-
-1. `docs/journal.md`에 항목 추가 (날짜·요약·결정·다음 작업, 역시간순)
-2. `docs/tasks.md`의 현재 작업 상태 업데이트
-3. 아키텍처 결정이 있었다면 `docs/decisions.md`에 ADR 추가
-4. 사용자 가시 변경이면 `CHANGELOG.md` 갱신
-5. 로컬 품질 게이트 통과 확인 후 커밋 및 머지
+품질 게이트는 `AGENTS.md`의 검증 섹션을 그대로 따른다
+(`poetry run pytest`, `poetry run pytest -m live`, `poetry run ruff check src tests`,
+`poetry run mypy src`).
