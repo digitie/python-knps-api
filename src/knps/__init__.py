@@ -8,7 +8,6 @@ from .config import KnpsConfig
 from .exceptions import (
     KnpsApiError,
     KnpsAuthError,
-    KnpsNoDataError,
     KnpsParseError,
     KnpsRateLimitError,
     KnpsRequestError,
@@ -54,7 +53,6 @@ __all__ = [
     "KnpsClient",
     "KnpsConfig",
     "KnpsGeoRecord",
-    "KnpsNoDataError",
     "KnpsParseError",
     "KnpsPlaceRecord",
     "KnpsRateLimitError",

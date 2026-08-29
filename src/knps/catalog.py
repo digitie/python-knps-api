@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .exceptions import KnpsRequestError
 from .models import CatalogEntry, Category, FileDataset
 
 DATA_GO_BASE = "https://www.data.go.kr/data"
@@ -236,7 +237,12 @@ def file_dataset(key: str) -> FileDataset:
     for dataset in FILE_DATASETS:
         if dataset.key == key or (dataset.data_go_id and dataset.data_go_id == key):
             return dataset
-    raise KeyError(f"unknown KNPS file dataset: {key}")
+    raise KnpsRequestError(
+        f"unknown KNPS file dataset: {key}",
+        provider="data.go.kr",
+        endpoint=key,
+        failure_kind="unknown_dataset",
+    )
 
 
 def catalog_entries(category: str | None = None) -> tuple[CatalogEntry, ...]:
@@ -269,7 +275,12 @@ def catalog_entry(key: str) -> CatalogEntry:
     for entry in catalog_entries():
         if entry.key == key or (entry.dataset_id and entry.dataset_id == key):
             return entry
-    raise KeyError(f"unknown KNPS catalog entry: {key}")
+    raise KnpsRequestError(
+        f"unknown KNPS catalog entry: {key}",
+        provider="data.go.kr",
+        endpoint=key,
+        failure_kind="unknown_dataset",
+    )
 
 
 def category_names() -> tuple[Category, ...]:

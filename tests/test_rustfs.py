@@ -1,6 +1,7 @@
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
+from botocore.exceptions import ClientError
 
 from knps import KnpsClient, KnpsStorageError
 
@@ -99,12 +100,16 @@ async def test_download_to_rustfs_overwrite_false(tmp_path, mock_s3) -> None:
 
 async def test_download_to_rustfs_upload_failure(tmp_path, mock_s3) -> None:
     local_file = tmp_path / "test_output.csv"
-    mock_s3.put_object.side_effect = Exception("S3 Connection Lost")
+    mock_s3.put_object.side_effect = ClientError(
+        {"Error": {"Code": "500", "Message": "S3 Connection Lost"}}, "PutObject"
+    )
 
     client = KnpsClient()
     client.config = client.config.from_env(
         rustfs_endpoint_url="http://localhost:9000",
         rustfs_bucket="test-bucket",
+        rustfs_access_key="access",
+        rustfs_secret_key="secret",
     )
 
     with patch.object(

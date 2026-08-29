@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypeAlias
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict
 
@@ -234,7 +234,7 @@ class KnpsGeoRecord(KnpsModel):
     longitude: float | None = None
     latitude: float | None = None
     road_address: str | None = None
-    raw: dict[str, Any] = {}
+    raw: dict[str, str | None] = {}
 
 
 class GeoFeatureCollection(KnpsModel):

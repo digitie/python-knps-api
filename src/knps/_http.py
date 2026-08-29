@@ -7,7 +7,7 @@ from typing import Any, Protocol, cast
 
 import httpx
 
-from ._ratelimit import AsyncTokenBucket
+from ._ratelimit import AsyncRateLimiter
 from .exceptions import (
     KnpsAuthError,
     KnpsRateLimitError,
@@ -57,7 +57,7 @@ class KnpsHttp:
         self.timeout = timeout
         self.session = session or _new_session(timeout)
         self._owns_session = session is None
-        self._rate_limiter = AsyncTokenBucket(max_rps=max_rps) if max_rps is not None else None
+        self._rate_limiter = AsyncRateLimiter(max_rps=max_rps) if max_rps is not None else None
 
     async def aclose(self) -> None:
         """내부에서 만든 HTTP 세션을 닫는다."""
@@ -73,13 +73,20 @@ class KnpsHttp:
         provider: str = "data.go.kr",
         endpoint: str | None = None,
     ) -> bytes:
-        if self._rate_limiter is not None:
-            await self._rate_limiter.acquire()
-        response = await self._get_with_retry(url, provider=provider, endpoint=endpoint or url)
+        resolved_endpoint = endpoint or url
+        if isinstance(self.session, httpx.AsyncClient):
+            return await self._get_bytes_streaming(
+                self.session,
+                url,
+                max_bytes=max_bytes,
+                provider=provider,
+                endpoint=resolved_endpoint,
+            )
+        response = await self._get_with_retry(url, provider=provider, endpoint=resolved_endpoint)
         _raise_for_status(
             response,
             provider=provider,
-            endpoint=endpoint or url,
+            endpoint=resolved_endpoint,
         )
         data = getattr(response, "content", b"")
         return data if max_bytes is None else data[:max_bytes]
@@ -101,6 +108,8 @@ class KnpsHttp:
 
         last_error: httpx.HTTPError | None = None
         for attempt in range(3):
+            if self._rate_limiter is not None:
+                await self._rate_limiter.acquire()
             try:
                 response = await self.session.get(url, timeout=self.timeout)
             except httpx.HTTPError as exc:
@@ -114,6 +123,51 @@ class KnpsHttp:
                 await asyncio.sleep(0.25 * (attempt + 1))
                 continue
             return response
+
+        raise KnpsRequestError(
+            f"request failed: {last_error}",
+            provider=provider,
+            endpoint=endpoint,
+            failure_kind="network",
+        ) from last_error
+
+    async def _get_bytes_streaming(
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        *,
+        max_bytes: int | None,
+        provider: str,
+        endpoint: str,
+    ) -> bytes:
+        """스트리밍으로 응답을 받아 max_bytes를 넘는 즉시 다운로드를 중단한다."""
+
+        last_error: httpx.HTTPError | None = None
+        for attempt in range(3):
+            if self._rate_limiter is not None:
+                await self._rate_limiter.acquire()
+            try:
+                async with client.stream("GET", url, timeout=self.timeout) as response:
+                    if attempt < 2 and _should_retry_status(response.status_code):
+                        await asyncio.sleep(0.25 * (attempt + 1))
+                        continue
+                    if response.status_code >= 400:
+                        await response.aread()
+                    _raise_for_status(
+                        cast(ResponseLike, response), provider=provider, endpoint=endpoint
+                    )
+                    chunks = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        chunks.extend(chunk)
+                        if max_bytes is not None and len(chunks) >= max_bytes:
+                            break
+                    return bytes(chunks[:max_bytes]) if max_bytes is not None else bytes(chunks)
+            except httpx.HTTPError as exc:
+                last_error = exc
+                if attempt == 2:
+                    break
+                await asyncio.sleep(0.25 * (attempt + 1))
+                continue
 
         raise KnpsRequestError(
             f"request failed: {last_error}",
