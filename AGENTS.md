@@ -35,7 +35,7 @@
 
 PC 개발은 Windows 호스트에서 직접 진행한다.
 
-- **로컬 품질 게이트 강제**: 이 저장소는 GitHub Actions/CI를 사용하지 않는다(ADR-10 정책 준용). 품질 게이트는 PR 머지 직전 작업자가 로컬에서 실행한다.
+- **CI**: `.github/workflows/ci.yml`에서 lint/typecheck/test를 실행한다. PR 머지 전 로컬에서도 동일한 명령을 먼저 실행할 것(아래 검증 섹션 참고).
 - **에이전트별 고정 worktree**: ChatGPT Codex는 `F:\dev\python-knps-api-codex`, Claude Code는 `F:\dev\python-knps-api-claude`, Google Antigravity 2.0은 `F:\dev\python-knps-api-antigravity`를 사용한다. 작업마다 브랜치만 새로 만들고, CodeGraph는 worktree마다 1회 `codegraph init -i` 후 `codegraph sync`로 유지한다.
 
 작업 전에 반드시 다음을 읽는다:
