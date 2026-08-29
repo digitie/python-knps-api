@@ -1,5 +1,5 @@
 from knps import PROVIDER_NAME
-from knps.catalog import catalog_entries, file_dataset, file_datasets
+from knps.catalog import catalog_entries, dataset_operations, file_dataset, file_datasets
 
 
 def test_provider_name() -> None:
@@ -39,6 +39,53 @@ def test_keyless_direct_download_urls_are_recorded() -> None:
     assert "knps_basic_statistics" not in direct
     assert all(dataset.download_url for dataset in direct.values())
     assert all("atchFileId=" in dataset.download_url for dataset in direct.values())
+
+
+def test_dataset_operations_empty_for_unverified_dataset() -> None:
+    dataset = file_dataset("knps_basic_statistics")
+    assert dataset.direct_download is False
+    assert dataset_operations(dataset) == ()
+
+
+def test_dataset_operations_gate_spatial_ops_by_geometry_type() -> None:
+    non_spatial = dataset_operations(file_dataset("knps_lod_table_catalog"))
+    assert {op.key for op in non_spatial} == {"download_artifact", "download_to_rustfs"}
+
+    line_dataset = dataset_operations(file_dataset("knps_trails"))
+    assert {op.key for op in line_dataset} == {
+        "download_artifact",
+        "download_geometries",
+        "read_geo_records",
+        "download_to_rustfs",
+    }
+
+    point_dataset = dataset_operations(file_dataset("knps_visitor_centers"))
+    assert {op.key for op in point_dataset} == {
+        "download_artifact",
+        "download_geometries",
+        "read_geo_records",
+        "read_place_records",
+        "download_to_rustfs",
+    }
+
+
+def test_dataset_operation_keys_match_file_namespace_methods() -> None:
+    from knps.files import FileDataNamespace
+
+    for entry in catalog_entries():
+        for operation in dataset_operations(file_dataset(entry.key)):
+            assert hasattr(FileDataNamespace, operation.key), operation.key
+
+
+def test_download_to_rustfs_local_path_default_is_dataset_scoped() -> None:
+    operation = next(
+        op
+        for op in dataset_operations(file_dataset("knps_trails"))
+        if op.key == "download_to_rustfs"
+    )
+    local_path_param = next(param for param in operation.params if param.name == "local_path")
+    assert local_path_param.required is True
+    assert "{dataset_key}" in local_path_param.default
 
 
 def test_verified_data_go_ids_match_catalog() -> None:
