@@ -1,4 +1,4 @@
-"""작은 async token bucket."""
+"""작은 async 고정 속도 제한기."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import asyncio
 import time
 
 
-class AsyncTokenBucket:
-    """단일 프로세스용 간단한 초당 요청 제한기."""
+class AsyncRateLimiter:
+    """단일 프로세스용 간단한 초당 요청 제한기 (burst 없이 최소 간격만 강제)."""
 
     def __init__(self, *, max_rps: float) -> None:
         if max_rps <= 0:

@@ -55,10 +55,6 @@ class KnpsRequestError(KnpsApiError):
     """잘못된 요청 또는 지원하지 않는 파라미터 오류."""
 
 
-class KnpsNoDataError(KnpsApiError):
-    """데이터가 필요하지만 응답에 데이터가 없을 때의 오류."""
-
-
 class KnpsServerError(KnpsApiError):
     """원격 서버 오류."""
 

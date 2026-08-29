@@ -42,6 +42,7 @@ _LAT_HEADERS = ("lat", "latitude", "y", "위도", "tm_y", "gis_y", "y좌표")
 
 _SHP_SUFFIX = ".shp"
 _CSV_SUFFIXES = (".csv", ".txt")
+_MAX_ZIP_MEMBERS = 10_000
 
 
 def extract_geometries(
@@ -89,9 +90,18 @@ def _extract_from_zip(
     max_features: int | None,
 ) -> GeoFeatureCollection:
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        infolist = archive.infolist()
+        if len(infolist) > _MAX_ZIP_MEMBERS:
+            raise KnpsParseError(
+                f"ZIP for dataset {dataset.key} has too many members "
+                f"({len(infolist)} > {_MAX_ZIP_MEMBERS})",
+                provider=dataset.provider,
+                endpoint=dataset.key,
+                failure_kind="geometry",
+            )
         names = {
             _decode_zip_member_name(info): info
-            for info in archive.infolist()
+            for info in infolist
             if not info.is_dir()
         }
         shp_name = next(
@@ -181,22 +191,37 @@ def _extract_from_shapefile(
 
     features: list[GeoFeature] = []
     geometry_type: str | None = None
-    with shapefile.Reader(**reader_kwargs) as reader:
-        field_names = [field[0] for field in reader.fields[1:]]  # [0]은 DeletionFlag
-        for index, shape_record in enumerate(reader.iterShapeRecords()):
-            if max_features is not None and index >= max_features:
-                break
-            geometry = _geometry_from_geo_interface(shape_record.shape.__geo_interface__)
-            if geometry is not None:
-                if transform is not None:
-                    geometry = _reproject_geometry(geometry, transform)
-                if geometry_type is None:
-                    geometry_type = geometry.type
-            properties = tuple(
-                (name, _stringify(value))
-                for name, value in zip(field_names, shape_record.record, strict=False)
-            )
-            features.append(GeoFeature(geometry=geometry, properties=properties))
+    try:
+        with shapefile.Reader(**reader_kwargs) as reader:
+            field_names = [field[0] for field in reader.fields[1:]]  # [0]은 DeletionFlag
+            for index, shape_record in enumerate(reader.iterShapeRecords()):
+                if max_features is not None and index >= max_features:
+                    break
+                shape = shape_record.shape
+                if shape is None or shape.shapeType == shapefile.NULL:
+                    geometry = None
+                else:
+                    try:
+                        geometry = _geometry_from_geo_interface(shape.__geo_interface__)
+                    except shapefile.GeoJSON_Error:
+                        geometry = None
+                if geometry is not None:
+                    if transform is not None:
+                        geometry = _reproject_geometry(geometry, transform)
+                    if geometry_type is None:
+                        geometry_type = geometry.type
+                properties = tuple(
+                    (name, _stringify(value))
+                    for name, value in zip(field_names, shape_record.record, strict=False)
+                )
+                features.append(GeoFeature(geometry=geometry, properties=properties))
+    except shapefile.ShapefileException as error:
+        raise KnpsParseError(
+            f"failed to read shapefile for dataset {dataset.key}: {error}",
+            provider=dataset.provider,
+            endpoint=dataset.key,
+            failure_kind="geometry",
+        ) from error
 
     return GeoFeatureCollection(
         dataset_key=dataset.key,
@@ -306,7 +331,9 @@ def _csv_row_geometry(
     if wkt_index is not None and wkt_index < len(row):
         value = row[wkt_index].strip()
         if value:
-            return parse_wkt(value)
+            geometry = parse_wkt(value)
+            if geometry is not None:
+                return geometry
     if lon_index is not None and lat_index is not None:
         if lon_index < len(row) and lat_index < len(row):
             lon = _maybe_float(row[lon_index])
@@ -328,7 +355,7 @@ _WKT_KEYWORDS: dict[str, GeometryType] = {
     "POLYGON": "Polygon",
     "MULTIPOLYGON": "MultiPolygon",
 }
-_WKT_HEAD = re.compile(r"^\s*([A-Za-z]+)\s*(?:ZM?|M)?\s*(\(.*\)|EMPTY)\s*$", re.DOTALL)
+_WKT_HEAD = re.compile(r"^\s*([A-Za-z]+?)\s*(?:ZM?|M)?\s*(\(.*\)|EMPTY)\s*$", re.DOTALL)
 
 
 def parse_wkt(text: str) -> Geometry | None:

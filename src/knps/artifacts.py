@@ -7,10 +7,12 @@ import io
 import zipfile
 from typing import Literal
 
+from .exceptions import KnpsParseError
 from .models import CsvPreview, CsvPreviewRow, FileArtifact, FileDataset, FileMember
 
 CSV_SUFFIXES = (".csv", ".txt")
 TEXT_ENCODINGS = ("utf-8-sig", "utf-8", "cp949", "euc-kr")
+_MAX_MEMBER_BYTES = 256 * 1024 * 1024
 
 
 def read_file_artifact(
@@ -56,6 +58,7 @@ def _read_zip_artifact(
                 )
             )
             if decoded_name.lower().endswith(CSV_SUFFIXES):
+                _check_member_size(info, decoded_name)
                 preview = _read_csv_preview(
                     decoded_name,
                     archive.read(info),
@@ -88,7 +91,7 @@ def _read_csv_preview(
         return None
 
     # csv.reader가 직접 텍스트 스트림을 받게 해서 quoted multi-line cell을 보존한다.
-    rows = list(csv.reader(io.StringIO(text)))
+    rows = _parse_csv_rows(text, member_name=member_name)
     if not rows or len(rows[0]) < 2:
         return None
 
@@ -119,7 +122,7 @@ def read_all_csv_rows(data: bytes) -> tuple[str | None, list[dict[str, str | Non
     읽는다(KNPS ZIP은 보통 CSV 1개 + SHP/HWP 부속 파일 구성이며, 간혹 중복
     사본 CSV가 들어 있어 모두 읽으면 행이 중복되므로 첫 member로 한정한다).
 
-    반환값은 ``(member_name, rows)``. CSV를 찾지 못하면 ``(None, [])``.
+    반환값은 ``(member_name, rows)``. CSV를 찾지 못하면 ``KnpsParseError``를 던진다.
     header보다 짧은 행은 ``None``으로 패딩, 긴 행의 trailing 값은
     ``__extra_{n}__`` key로 보존한다.
     """
@@ -131,19 +134,28 @@ def read_all_csv_rows(data: bytes) -> tuple[str | None, list[dict[str, str | Non
                     continue
                 name = _decode_zip_member_name(info)
                 if name.lower().endswith(CSV_SUFFIXES):
-                    return name, _read_all_csv_rows_bytes(archive.read(info))
-        return None, []
+                    _check_member_size(info, name)
+                    return name, _read_all_csv_rows_bytes(archive.read(info), member_name=name)
+        raise KnpsParseError("no CSV/TXT member found in ZIP archive", failure_kind="csv")
     return None, _read_all_csv_rows_bytes(data)
 
 
-def _read_all_csv_rows_bytes(data: bytes) -> list[dict[str, str | None]]:
+def _read_all_csv_rows_bytes(
+    data: bytes,
+    *,
+    member_name: str | None = None,
+) -> list[dict[str, str | None]]:
     decoded = _decode_text(data)
     if decoded is None:
-        return []
+        target = f" {member_name!r}" if member_name else ""
+        raise KnpsParseError(
+            f"could not decode CSV bytes{target} with any of {TEXT_ENCODINGS}",
+            failure_kind="csv",
+        )
     text, _encoding = decoded
     if not text:
         return []
-    rows = list(csv.reader(io.StringIO(text)))
+    rows = _parse_csv_rows(text, member_name=member_name)
     if not rows or len(rows[0]) < 1:
         return []
     headers = [_clean_header(header, index) for index, header in enumerate(rows[0])]
@@ -157,6 +169,26 @@ def _read_all_csv_rows_bytes(data: bytes) -> list[dict[str, str | None]]:
             record[f"__extra_{extra_index + 1}__"] = value
         records.append(record)
     return records
+
+
+def _check_member_size(info: zipfile.ZipInfo, member_name: str) -> None:
+    if info.file_size > _MAX_MEMBER_BYTES:
+        raise KnpsParseError(
+            f"ZIP member {member_name!r} is {info.file_size} bytes uncompressed, "
+            f"exceeding the {_MAX_MEMBER_BYTES}-byte limit",
+            failure_kind="zip_bomb",
+        )
+
+
+def _parse_csv_rows(text: str, *, member_name: str | None = None) -> list[list[str]]:
+    try:
+        return list(csv.reader(io.StringIO(text)))
+    except csv.Error as error:
+        target = f" {member_name!r}" if member_name else ""
+        raise KnpsParseError(
+            f"failed to parse CSV rows{target}: {error}",
+            failure_kind="csv",
+        ) from error
 
 
 def _decode_text(data: bytes) -> tuple[str, str] | None:

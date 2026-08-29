@@ -7,9 +7,10 @@ import os
 import re
 import urllib.parse
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Protocol
 
 import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 
 from .artifacts import read_all_csv_rows, read_file_artifact
 from .catalog import file_dataset, file_datasets
@@ -89,15 +90,18 @@ class _DownloadHttp(Protocol):
 
 
 class _FileClient(Protocol):
-    _http: _DownloadHttp
-    config: KnpsConfig
+    @property
+    def _http(self) -> _DownloadHttp: ...
+
+    @property
+    def config(self) -> KnpsConfig: ...
 
 
 class FileDataNamespace:
     """파일데이터 catalog와 다운로드 primitive."""
 
-    def __init__(self, client: object) -> None:
-        self._client = cast(_FileClient, client)
+    def __init__(self, client: _FileClient) -> None:
+        self._client = client
 
     def datasets(self, category: str | None = None) -> tuple[FileDataset, ...]:
         """정리된 파일데이터 목록을 반환한다."""
@@ -253,7 +257,7 @@ class FileDataNamespace:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             await asyncio.to_thread(path.write_bytes, data)
-        except Exception as exc:
+        except OSError as exc:
             raise KnpsStorageError(
                 f"Failed to write local file at {path}: {exc}",
                 provider="local",
@@ -270,6 +274,13 @@ class FileDataNamespace:
                 endpoint=key,
                 failure_kind="config",
             )
+        if not config.rustfs_access_key or not config.rustfs_secret_key:
+            raise KnpsStorageError(
+                "RustFS access key/secret key is not configured.",
+                provider="rustfs",
+                endpoint=key,
+                failure_kind="config",
+            )
 
         try:
             s3_client = boto3.client(
@@ -279,7 +290,7 @@ class FileDataNamespace:
                 aws_secret_access_key=config.rustfs_secret_key,
                 region_name=config.rustfs_region,
             )
-        except Exception as exc:
+        except BotoCoreError as exc:
             raise KnpsStorageError(
                 f"Failed to initialize boto3 S3 client: {exc}",
                 provider="rustfs",
@@ -287,37 +298,40 @@ class FileDataNamespace:
                 failure_kind="client_init",
             ) from exc
 
-        # 4. object_key 결정
-        if not object_key:
-            parsed = urllib.parse.urlparse(dataset.download_url or "")
-            filename = os.path.basename(parsed.path)
-            if not filename:
-                filename = f"{key}.dat"
-            object_key = f"datasets/{key}/{filename}"
-
-        # 5. RustFS(S3) 업로드
         try:
-            import mimetypes
+            # 4. object_key 결정
+            if not object_key:
+                parsed = urllib.parse.urlparse(dataset.download_url or "")
+                filename = os.path.basename(parsed.path)
+                if not filename:
+                    filename = f"{key}.dat"
+                object_key = f"datasets/{key}/{filename}"
 
-            content_type, _ = mimetypes.guess_type(object_key)
-            if not content_type:
-                content_type = "application/octet-stream"
+            # 5. RustFS(S3) 업로드
+            try:
+                import mimetypes
 
-            await asyncio.to_thread(
-                s3_client.put_object,
-                Bucket=config.rustfs_bucket or "knps",
-                Key=object_key,
-                Body=data,
-                ContentType=content_type,
-            )
-        except Exception as exc:
-            raise KnpsStorageError(
-                f"Failed to upload data to RustFS (bucket: {config.rustfs_bucket}, "
-                f"key: {object_key}): {exc}",
-                provider="rustfs",
-                endpoint=key,
-                failure_kind="upload",
-            ) from exc
+                content_type, _ = mimetypes.guess_type(object_key)
+                if not content_type:
+                    content_type = "application/octet-stream"
+
+                await asyncio.to_thread(
+                    s3_client.put_object,
+                    Bucket=config.rustfs_bucket or "knps",
+                    Key=object_key,
+                    Body=data,
+                    ContentType=content_type,
+                )
+            except (BotoCoreError, ClientError) as exc:
+                raise KnpsStorageError(
+                    f"Failed to upload data to RustFS (bucket: {config.rustfs_bucket}, "
+                    f"key: {object_key}): {exc}",
+                    provider="rustfs",
+                    endpoint=key,
+                    failure_kind="upload",
+                ) from exc
+        finally:
+            s3_client.close()
 
         return object_key
 
