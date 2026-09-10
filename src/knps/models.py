@@ -128,7 +128,13 @@ class CsvPreview(KnpsModel):
 
 
 class FileArtifact(KnpsModel):
-    """다운로드 bytes를 Pydantic DTO로 읽은 결과."""
+    """다운로드 bytes를 Pydantic DTO로 읽은 결과.
+
+    ``truncated``가 ``True``면 ``max_bytes``로 다운로드가 잘렸다는 뜻이다 —
+    ``members``/``csv_previews``가 완전한 파일이 아니라 잘린 bytes에서
+    읽힌 결과이므로, 마지막 항목이 불완전하거나 일부 member가 누락됐을 수
+    있다는 신호로 활용한다.
+    """
 
     dataset_key: str
     data_go_id: str
@@ -136,6 +142,7 @@ class FileArtifact(KnpsModel):
     size_bytes: int
     members: tuple[FileMember, ...] = ()
     csv_previews: tuple[CsvPreview, ...] = ()
+    truncated: bool = False
 
 
 def _coordinates_to_lists(coordinates: object) -> object:
@@ -243,6 +250,10 @@ class GeoFeatureCollection(KnpsModel):
     ``source_crs``는 원본 좌표계(예: ``EPSG:5179``), ``crs``는 현재
     ``features`` 좌표가 따르는 좌표계다. 좌표를 재투영하면 ``crs``가
     ``source_crs``와 달라지고, 재투영하지 않으면 둘이 같다.
+
+    ``truncated``가 ``True``면 ``max_bytes``로 다운로드가 잘렸다는 뜻이다 —
+    ``features``가 원본 데이터셋의 완전한 feature 집합이 아니라 잘린
+    bytes에서 추출할 수 있었던 일부일 수 있다는 신호로 활용한다.
     """
 
     dataset_key: str
@@ -252,6 +263,7 @@ class GeoFeatureCollection(KnpsModel):
     source_crs: str | None = None
     crs: str | None = None
     features: tuple[GeoFeature, ...] = ()
+    truncated: bool = False
 
     @property
     def as_geojson(self) -> dict[str, object]:

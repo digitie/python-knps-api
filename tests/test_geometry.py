@@ -210,3 +210,30 @@ def test_max_features_limits_extraction() -> None:
     collection = extract_geometries(dataset, payload, max_features=2)
 
     assert len(collection.features) == 2
+
+
+def test_extract_geometries_defaults_to_not_truncated() -> None:
+    """``truncated``를 넘기지 않으면 완전한 다운로드로 취급한다(기본값 False)."""
+
+    dataset = file_dataset("knps_visitor_centers")
+    payload = "이름,경도,위도\na,1,1\n".encode()
+
+    collection = extract_geometries(dataset, payload)
+
+    assert collection.truncated is False
+
+
+def test_extract_geometries_propagates_truncated_flag() -> None:
+    """``max_bytes``로 잘린 bytes에서 추출했다는 신호가 결과 DTO에 남아야 한다.
+
+    회귀 방지 대상: 잘린 다운로드에서 추출한 feature 집합이 완전한 파일에서
+    추출한 것과 구분 불가능하게 반환되던 문제.
+    """
+
+    dataset = file_dataset("knps_visitor_centers")
+    payload = "이름,경도,위도\na,1,1\n".encode()
+
+    collection = extract_geometries(dataset, payload, truncated=True)
+
+    assert collection.truncated is True
+    assert len(collection.features) == 1
