@@ -88,3 +88,39 @@ def test_csv_preview_row_values_are_immutable() -> None:
     # Pydantic frozen이라 attribute 재할당도 막힘.
     with pytest.raises(ValidationError):
         row.values = (("이름", "치악산"),)  # type: ignore[misc]
+
+
+def test_read_file_artifact_defaults_to_not_truncated() -> None:
+    """``truncated``를 넘기지 않으면 완전한 다운로드로 취급한다(기본값 False)."""
+
+    dataset = file_dataset("knps_lod_table_catalog")
+    artifact = read_file_artifact(dataset, "이름,값\n지리산,1\n".encode())
+
+    assert artifact.truncated is False
+
+
+def test_read_file_artifact_propagates_truncated_flag_for_csv() -> None:
+    """``max_bytes``로 잘린 CSV bytes를 읽었다는 신호가 결과 DTO에 남아야 한다.
+
+    회귀 방지 대상: 잘린 다운로드에서 읽은 preview가 완전한 파일에서 읽은
+    것과 구분 불가능하게 반환되던 문제.
+    """
+
+    dataset = file_dataset("knps_lod_table_catalog")
+    artifact = read_file_artifact(
+        dataset, "이름,값\n지리산,1\n".encode(), truncated=True
+    )
+
+    assert artifact.truncated is True
+
+
+def test_read_file_artifact_propagates_truncated_flag_for_zip() -> None:
+    dataset = file_dataset("knps_trails")
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("trail.csv", "코스,거리\n둘레길,3.2\n")
+
+    artifact = read_file_artifact(dataset, buffer.getvalue(), truncated=True)
+
+    assert artifact.kind == "zip"
+    assert artifact.truncated is True

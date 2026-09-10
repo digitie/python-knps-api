@@ -33,6 +33,18 @@ from .records import (
 
 _DEFAULT_PREVIEW_ROWS = 5
 
+
+def _is_truncated(data: bytes, max_bytes: int | None) -> bool:
+    """``max_bytes``로 다운로드가 실제로 잘렸는지 best-effort로 판단한다.
+
+    받은 bytes 길이가 ``max_bytes``에 도달했으면(``_get_bytes_streaming``이
+    그 지점에서 중단했으므로) 원본이 더 길었을 가능성이 높다고 본다. 원본이
+    우연히 정확히 ``max_bytes`` 길이였을 극히 드문 경우는 false positive로
+    남지만, 반대 방향(실제로 잘렸는데 완전한 것처럼 보이는 것)보다 안전하다.
+    """
+
+    return max_bytes is not None and len(data) >= max_bytes
+
 _LINE_GEOMETRY_TYPES = frozenset({"LineString", "MultiLineString"})
 
 # vertex 행이 만든 ``POINT (x y)`` WKT에서 좌표 추출 (#9 — trails 조립용).
@@ -76,6 +88,50 @@ def _assemble_line_records(
         wkt = "LINESTRING (" + ", ".join(f"{x} {y}" for x, y in points) + ")"
         assembled.append(first[source_id].model_copy(update={"geom_wkt": wkt}))
     return tuple(passthrough + assembled)
+
+
+def _read_place_records(
+    dataset: FileDataset, data: bytes
+) -> tuple[KnpsPlaceRecord, ...]:
+    """CSV bytes를 typed place record로 정규화한다 (동기, CPU-bound).
+
+    `asyncio.to_thread`로만 호출한다 — 전체 CSV 파싱 + 행별 정규화가
+    이벤트 루프를 막을 만큼 무거울 수 있다(#9 knps_trails 실측 참고).
+    """
+
+    _member, rows = read_all_csv_rows(data)
+    return tuple(normalize_place_record(dataset.key, row) for row in rows)
+
+
+def _normalize_geo_records(
+    dataset: FileDataset, collection: GeoFeatureCollection
+) -> tuple[KnpsGeoRecord, ...]:
+    """geometry feature를 typed geo record로 정규화하고 필요시 조립한다 (동기, CPU-bound).
+
+    `asyncio.to_thread`로만 호출한다 — feature 수가 많으면(trails류 CSV는
+    코스당 수천 vertex 행, #9 실측 910,110행) WKT 변환 + Pydantic 정규화 +
+    `_assemble_line_records`의 정규식 재매칭이 이벤트 루프를 막을 만큼
+    무거울 수 있다.
+    """
+
+    records: list[KnpsGeoRecord] = []
+    for feature in collection.features:
+        if feature.geometry is None:
+            continue
+        records.append(
+            normalize_geo_record(
+                collection.dataset_key,
+                geometry_to_wkt(feature.geometry),
+                feature.as_dict,
+                centroid=representative_point(feature.geometry),
+            )
+        )
+    if dataset.geometry_type in _LINE_GEOMETRY_TYPES:
+        # trails류 CSV는 코스별 vertex 단위 행이라 행=POINT record가 된다
+        # (#9 — knps_trails 실측 910,110 vertex 행). 카탈로그가 선언한
+        # geometry 계약(LineString)에 맞게 source_id 단위로 조립한다.
+        return _assemble_line_records(records)
+    return tuple(records)
 
 
 class _DownloadHttp(Protocol):
@@ -175,7 +231,13 @@ class FileDataNamespace:
 
         dataset = file_dataset(key)
         data = await self._fetch_dataset_bytes(dataset, max_bytes=max_bytes)
-        return read_file_artifact(dataset, data, preview_rows=preview_rows)
+        return await asyncio.to_thread(
+            read_file_artifact,
+            dataset,
+            data,
+            preview_rows=preview_rows,
+            truncated=_is_truncated(data, max_bytes),
+        )
 
     def extract_geometries(
         self,
@@ -218,12 +280,14 @@ class FileDataNamespace:
 
         dataset = file_dataset(key)
         data = await self._fetch_dataset_bytes(dataset, max_bytes=max_bytes)
-        return extract_geometries(
+        return await asyncio.to_thread(
+            extract_geometries,
             dataset,
             data,
             source_crs=source_crs,
             target_crs=target_crs,
             max_features=max_features,
+            truncated=_is_truncated(data, max_bytes),
         )
 
     async def download_to_rustfs(
@@ -283,7 +347,8 @@ class FileDataNamespace:
             )
 
         try:
-            s3_client = boto3.client(
+            s3_client = await asyncio.to_thread(
+                boto3.client,
                 "s3",
                 endpoint_url=config.rustfs_endpoint_url,
                 aws_access_key_id=config.rustfs_access_key,
@@ -351,8 +416,7 @@ class FileDataNamespace:
 
         dataset = file_dataset(key)
         data = await self._fetch_dataset_bytes(dataset, max_bytes=max_bytes)
-        _member, rows = read_all_csv_rows(data)
-        return tuple(normalize_place_record(dataset.key, row) for row in rows)
+        return await asyncio.to_thread(_read_place_records, dataset, data)
 
     async def read_geo_records(
         self,
@@ -378,22 +442,5 @@ class FileDataNamespace:
             max_features=max_features,
             max_bytes=max_bytes,
         )
-        records: list[KnpsGeoRecord] = []
-        for feature in collection.features:
-            if feature.geometry is None:
-                continue
-            records.append(
-                normalize_geo_record(
-                    collection.dataset_key,
-                    geometry_to_wkt(feature.geometry),
-                    feature.as_dict,
-                    centroid=representative_point(feature.geometry),
-                )
-            )
         dataset = file_dataset(key)
-        if dataset.geometry_type in _LINE_GEOMETRY_TYPES:
-            # trails류 CSV는 코스별 vertex 단위 행이라 행=POINT record가 된다
-            # (#9 — knps_trails 실측 910,110 vertex 행). 카탈로그가 선언한
-            # geometry 계약(LineString)에 맞게 source_id 단위로 조립한다.
-            return _assemble_line_records(records)
-        return tuple(records)
+        return await asyncio.to_thread(_normalize_geo_records, dataset, collection)

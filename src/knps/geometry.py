@@ -52,6 +52,7 @@ def extract_geometries(
     source_crs: str | None = None,
     target_crs: str | None = WGS84,
     max_features: int | None = None,
+    truncated: bool = False,
 ) -> GeoFeatureCollection:
     """다운로드 파일에서 geometry feature를 추출한다.
 
@@ -61,24 +62,30 @@ def extract_geometries(
 
     ``source_crs``가 명시되거나 ``.prj``에서 감지되고, ``target_crs``와 다르면
     ``pyproj``로 좌표를 재투영한다. 좌표계를 알 수 없으면 원본 좌표를 그대로 둔다.
+
+    ``truncated``는 호출자가 ``max_bytes``로 다운로드를 일부러 잘랐는지 여부를
+    그대로 전달하는 값이다 — 잘린 bytes에서 추출한 feature 집합이 원본
+    데이터셋의 일부일 뿐이라는 신호로 결과에 남긴다.
     """
 
     if zipfile.is_zipfile(io.BytesIO(data)):
-        return _extract_from_zip(
+        collection = _extract_from_zip(
             dataset,
             data,
             source_crs=source_crs,
             target_crs=target_crs,
             max_features=max_features,
         )
-    return _extract_from_csv_bytes(
-        dataset,
-        None,
-        data,
-        source_crs=source_crs,
-        target_crs=target_crs,
-        max_features=max_features,
-    )
+    else:
+        collection = _extract_from_csv_bytes(
+            dataset,
+            None,
+            data,
+            source_crs=source_crs,
+            target_crs=target_crs,
+            max_features=max_features,
+        )
+    return collection.model_copy(update={"truncated": truncated}) if truncated else collection
 
 
 def _extract_from_zip(

@@ -2,6 +2,39 @@
 
 이 문서는 `python-knps-api` 프로젝트의 개발 기록과 주요 기술적 결정을 역시간순으로 관리한다.
 
+## 2026-09-11 (claude, asyncio 재검증 2인 적대적 리뷰)
+
+- **작업**: 이 저장소는 처음부터 async-only 클라이언트(`KnpsClient`, sync 클라이언트 없음)라
+  다른 sibling 저장소들의 "sync/async 비대칭" 버그 유형은 적용되지 않는다는 전제로, 독립된
+  서브에이전트 2명(동시성/자원관리 관점, 보안/데이터 무결성 관점)에게 async 코드 자체의
+  순수 정합성을 다시 감사시켰다.
+- **발견 1 (동시성)**: `download_artifact()`/`download_geometries()`/`read_place_records()`/
+  `read_geo_records()`가 CPU-bound CSV/ZIP 파싱(`read_file_artifact`/`extract_geometries`)과
+  Pydantic 정규화를 `asyncio.to_thread` 없이 코루틴 안에서 직접 실행해 이벤트 루프를 막고
+  있었다. `knps_trails`는 실측 910,110 vertex 행 규모라(2026-06-12 항목 참고)
+  `asyncio.gather()`로 여러 다운로드를 동시에 돌리거나 공유 클라이언트로 서버를 만들면 한
+  호출이 다른 모든 코루틴을 초 단위로 막을 수 있었다. `download_to_rustfs()`의
+  `boto3.client()` 생성도 threading 누락이었다(바로 아래 `s3_client.put_object`는 이미
+  올바르게 `asyncio.to_thread`로 감싸져 있었는데 클라이언트 생성만 빠짐 — mcst-api에서 찾은
+  것과 같은 패턴).
+- **발견 2 (데이터 무결성)**: `download_artifact()`/`download_geometries()`가 `max_bytes`로
+  다운로드를 일부러 자르는 기능(큰 파일 빠른 미리보기용)을 제공하는데, 결과
+  `FileArtifact`/`GeoFeatureCollection`에는 잘렸다는 신호가 전혀 없어서 호출자가 완전한
+  파일을 읽은 것과 구분할 수 없었다. `max_bytes` 도달 여부를 감지해 두 모델에 새로
+  추가한 `truncated: bool` 필드에 채워 넣도록 수정.
+- **수정**: `files.py`의 CPU-bound 호출부를 `asyncio.to_thread`로 감싸고(정규화 후처리는
+  `_read_place_records`/`_normalize_geo_records` helper로 추출), `models.py`에
+  `FileArtifact.truncated`/`GeoFeatureCollection.truncated` 필드 추가,
+  `artifacts.read_file_artifact()`/`geometry.extract_geometries()`가 `truncated` 인자를
+  받아 결과에 반영하도록 확장.
+- **검증**: mock 테스트 82 passed(기존 70 + 신규 12: thread-offload 4개, truncation 신호
+  8개, 모두 수정 전 코드로 되돌리면 실패함을 확인), ruff/mypy 통과, live e2e 17/17 passed
+  (`knps_trails` 910K행 데이터셋 포함, 회귀 없음).
+- **비대칭 아님 확인**: 레이트리미터(`AsyncRateLimiter`)는 `await asyncio.sleep`까지 포함해
+  critical section 전체를 단일 lock으로 감싸 안전, HTTP 에러 매핑/재시도는 모든 경로에서
+  타입화된 예외로 귀결, RustFS 자격증명은 `repr=False`로 보호되고 예외 메시지에도 노출
+  안 됨, 다운로드 URL은 항상 고정 카탈로그로만 해석되어 조작 불가능함을 확인.
+
 ## 2026-06-12
 - **작업**: #9 — `knps_trails` vertex 행을 코스 단위 LINESTRING으로 조립
 - **내용**:

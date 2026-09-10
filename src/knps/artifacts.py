@@ -20,11 +20,18 @@ def read_file_artifact(
     data: bytes,
     *,
     preview_rows: int = 5,
+    truncated: bool = False,
 ) -> FileArtifact:
-    """다운로드 파일을 archive/text 구조만 읽어서 DTO로 변환한다."""
+    """다운로드 파일을 archive/text 구조만 읽어서 DTO로 변환한다.
+
+    ``truncated``는 호출자가 ``max_bytes``로 다운로드를 일부러 잘랐는지
+    여부를 그대로 전달하는 값이다(이 함수는 재판단하지 않는다) — 잘린
+    bytes에서 읽은 구조/preview가 완전한 파일처럼 보이지 않도록
+    :class:`FileArtifact.truncated`에 남긴다.
+    """
 
     if zipfile.is_zipfile(io.BytesIO(data)):
-        return _read_zip_artifact(dataset, data, preview_rows=preview_rows)
+        return _read_zip_artifact(dataset, data, preview_rows=preview_rows, truncated=truncated)
 
     preview = _read_csv_preview(None, data, preview_rows=preview_rows)
     kind: Literal["csv", "binary"] = "csv" if preview is not None else "binary"
@@ -34,6 +41,7 @@ def read_file_artifact(
         kind=kind,
         size_bytes=len(data),
         csv_previews=() if preview is None else (preview,),
+        truncated=truncated,
     )
 
 
@@ -42,6 +50,7 @@ def _read_zip_artifact(
     data: bytes,
     *,
     preview_rows: int,
+    truncated: bool = False,
 ) -> FileArtifact:
     members: list[FileMember] = []
     previews: list[CsvPreview] = []
@@ -73,6 +82,7 @@ def _read_zip_artifact(
         size_bytes=len(data),
         members=tuple(members),
         csv_previews=tuple(previews),
+        truncated=truncated,
     )
 
 
