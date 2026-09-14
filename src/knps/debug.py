@@ -9,7 +9,6 @@ import하지 않는다 — 순수 표준 라이브러리 + knps 내부 타입만
 
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 import time
@@ -361,29 +360,14 @@ async def arun_dataset_operation(
     )
 
 
-async def _arun_and_close(
+async def run_dataset_operation(
     client: KnpsClient,
     dataset_key: str,
     operation: DatasetOperation,
     kwargs: Mapping[str, Any],
 ) -> DebugRun:
+    """오퍼레이션을 비동기로 실행하고 전달받은 클라이언트를 같은 루프에서 닫는다."""
     try:
         return await arun_dataset_operation(client, dataset_key, operation, kwargs)
     finally:
         await client.aclose()
-
-
-def run_dataset_operation(
-    client: KnpsClient,
-    dataset_key: str,
-    operation: DatasetOperation,
-    kwargs: Mapping[str, Any],
-) -> DebugRun:
-    """Streamlit 같은 동기 문맥에서 쓰는 :func:`arun_dataset_operation` wrapper.
-
-    ``client``의 소유권을 넘겨받아 실행 후 ``client.aclose()``까지 같은
-    이벤트 루프 안에서 처리한다 — 호출부(Streamlit)는 매 실행마다 새
-    :class:`KnpsClient`를 만들어 넘기기만 하면 된다.
-    """
-
-    return asyncio.run(_arun_and_close(client, dataset_key, operation, kwargs))

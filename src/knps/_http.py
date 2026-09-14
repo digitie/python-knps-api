@@ -7,7 +7,8 @@ from typing import Any, Protocol, cast
 
 import httpx
 
-from ._ratelimit import AsyncRateLimiter
+from ._httpx import send_after_token
+from ._ratelimit import AsyncTokenBucket
 from .exceptions import (
     KnpsAuthError,
     KnpsRateLimitError,
@@ -55,9 +56,9 @@ class KnpsHttp:
         max_rps: float | None = 5.0,
     ) -> None:
         self.timeout = timeout
+        self._rate_limiter = AsyncTokenBucket(max_rps=max_rps) if max_rps is not None else None
         self.session = session or _new_session(timeout)
         self._owns_session = session is None
-        self._rate_limiter = AsyncRateLimiter(max_rps=max_rps) if max_rps is not None else None
 
     async def aclose(self) -> None:
         """내부에서 만든 HTTP 세션을 닫는다."""
@@ -147,7 +148,13 @@ class KnpsHttp:
             if self._rate_limiter is not None:
                 await self._rate_limiter.acquire()
             try:
-                async with client.stream("GET", url, timeout=self.timeout) as response:
+                response = await send_after_token(
+                    client,
+                    client.build_request("GET", url, timeout=self.timeout),
+                    self._rate_limiter,
+                    stream=True,
+                )
+                try:
                     if attempt < 2 and _should_retry_status(response.status_code):
                         await asyncio.sleep(0.25 * (attempt + 1))
                         continue
@@ -162,6 +169,8 @@ class KnpsHttp:
                         if max_bytes is not None and len(chunks) >= max_bytes:
                             break
                     return bytes(chunks[:max_bytes]) if max_bytes is not None else bytes(chunks)
+                finally:
+                    await response.aclose()
             except httpx.HTTPError as exc:
                 last_error = exc
                 if attempt == 2:
