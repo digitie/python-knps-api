@@ -115,3 +115,8 @@ Curated scope는 data.go.kr의 국립공원공단 공개 데이터, `python-krto
 ## 법적 고지
 
 이 저장소의 라이선스(GPL-3.0-or-later, [`LICENSE`](LICENSE))는 이 저장소의 코드에만 적용된다. 국립공원공단, 공공데이터포털(data.go.kr)이 제공하는 상위 데이터/API의 이용은 각 제공기관의 이용약관과 재배포 조건을 따라야 하며, 이 저장소가 그 준수를 보장하지 않는다.
+
+## TPS 설정
+
+`max_rps`로 초당 충전량을 지정한다. 소수 TPS·burst·취소 동작과
+공유 범위는 [비동기 TPS 제어](docs/async-tps.md)를 참고한다.

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -365,7 +366,7 @@ def _execute(
             trace=[f"client 초기화 실패: {exc.__class__.__name__}"],
             error=debug_error(exc),
         )
-    return run_dataset_operation(client, dataset.key, operation, kwargs)
+    return asyncio.run(run_dataset_operation(client, dataset.key, operation, kwargs))
 
 
 def _raw_response_tab(

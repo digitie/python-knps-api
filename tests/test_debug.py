@@ -210,7 +210,7 @@ async def test_arun_dataset_operation_rejects_unknown_operation_key() -> None:
     assert run.catalog is not None
 
 
-def test_run_dataset_operation_closes_client(monkeypatch) -> None:
+async def test_run_dataset_operation_closes_client(monkeypatch) -> None:
     client = KnpsClient()
     client.files.download_artifact = AsyncMock(  # type: ignore[method-assign]
         return_value=FileArtifact(
@@ -224,7 +224,7 @@ def test_run_dataset_operation_closes_client(monkeypatch) -> None:
     monkeypatch.setattr(client, "aclose", aclose_mock)
 
     operation = _operation("knps_lod_table_catalog", "download_artifact")
-    run = run_dataset_operation(client, "knps_lod_table_catalog", operation, {})
+    run = await run_dataset_operation(client, "knps_lod_table_catalog", operation, {})
 
     assert run.error is None
     aclose_mock.assert_awaited_once()
