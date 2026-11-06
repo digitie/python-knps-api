@@ -34,3 +34,19 @@ python-knps-api#17과 Map T-KNPS-DATA-GAPS의 남은 대피소를 처리한다. 
 - 실제 parser로 오래된 SHX/DBF가 2개 SHP Point를 1개로 숨기는 문제도 확인했다. 수정 전 3 failed / 정상 no-SHX 1 passed다.
 - Reader 전에 독립 물리 framing 검증과 누적 record 100,000 상한을 적용한다. SHX는 무시하고 SHP를 순차 읽는다. valid no-SHX와 stale-SHX/정상 DBF는 실제 2개 Point를 모두 반환한다.
 - 최종 직접 검증: 관련 120 passed (0.82초), non-live 168 passed / 17 deselected / 14 subtests passed (3.30초), Ruff/strict mypy 15개 파일 통과. 전역 ID 보존과 기존 archive/raw hash 회귀도 포함한다.
+
+
+## 2026-11-07 CSV source_crs 실제 guard 보완
+
+- 4fb61a2의 문서상 설명과 달리 명시적 source_crs가 CSV 경로에서 무시되던 P2를 실제 코드로 수정했다.
+- 대피소 plain CSV/CSV ZIP/다른 dataset CSV의 공개 호출 3건은 CSV reader sentinel로 수정 전 모두 실패했다. None 기본값 대조 3건은 통과했다.
+- SHP 결과가 없으면 source_crs is not None일 때 CSV reader 전에 KnpsParseError다. asyncio.to_thread와 기본 CSV 의미는 변경하지 않았다.
+- 직접 검증: 관련 126 passed (0.77초), 전체 non-live 174 passed / 17 deselected / 14 subtests passed (3.25초), Ruff 전체·strict mypy 15개 파일 통과. 소비 Map/UI 성공은 부모의 별도 증거다.
+
+
+## 2026-11-07 삭제 DBF/NULL shape 보완
+
+- 물리 framing preflight가 정상적인 삭제 DBF 행의 NULL shape까지 거부하던 P2를 수정했다. NULL은 정확히 type 4 bytes만 허용하며 양수 전진/실제 길이/record budget은 유지한다.
+- 삭제 DBF+NULL 뒤 정상 Point 반환은 수정 전 1 failed였다. 활성 DBF+NULL 오류와 잘못된 NULL 20-byte body의 Reader 전 거부는 2 passed 대조였다.
+- 기존 reader가 DBF 삭제 여부를 먼저 확인하므로 삭제 행만 skip하고 활성 NULL은 계속 KnpsParseError다. 다른 삭제 정책은 바꾸지 않았다.
+- CSV source_crs guard를 포함한 직접 최종 결과: 관련 129 passed (0.78초), non-live 177 passed / 17 deselected / 14 subtests passed (3.31초), Ruff/strict mypy 15개 파일 통과.

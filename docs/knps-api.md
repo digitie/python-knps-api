@@ -97,12 +97,16 @@ needs_verification이며 기존 다운로드 URL을 보존한다. 라이브 성�
   양수 stride와 필드 폭의 합, count와 실제 bytes, 삭제 flag도 먼저 검증한다.
   SHP 물리 개수와 DBF count가 다르면 부분 성공하지 않는다.
 - SHX는 있더라도 읽지 않는다. 검증된 SHP 본문을 순차 읽으므로 오래된 SHX가
-  실제 Point를 숨기지 못한다. DBF 삭제 행은 해당 번호의 Point와 함께 제외한다.
+  실제 Point를 숨기지 못한다. 사전 검증에서 NULL shape는 정확히 type 4 bytes만 허용한다.
+  DBF 삭제 행의 NULL은 같은 행 번호와 함께 제외하고, 활성 DBF 행의 NULL은 계속 오류다.
 - 중첩 ZIP 깊이 최대 3(바깥 ZIP은 0), 총 멤버 10,000, 멤버당 256 MiB,
   누적 해제 크기 512 MiB와 archive 전체 물리 SHP record 100,000개가 상한이다.
   record 상한은 각 레이어를 Reader/typed record로 만들기 전에 검사한다.
   중첩 ZIP 자체와 내부 멤버를 모두 누적 계산한다.
   경로 순회·모호한 대소문자 중복 경로는 거부하고 파일을 디스크에 추출하지 않는다.
+- read_place_records의 명시적 source_crs는 대피소 SHP에만 적용한다. SHP 경로가
+  아닌 plain CSV/CSV ZIP 및 다른 CSV dataset은 CSV reader/normalizer 진입 전에
+  KnpsParseError로 거부한다. None 기본값의 기존 CSV 동작은 유지한다.
 - 다른 dataset의 geometry 선택, CSV 전체 행 읽기, 비동기 thread offload는 그대로다.
   SHP-only bytes를 CSV 전용 read_all_csv_rows에 전달하면 계속 오류다.
 

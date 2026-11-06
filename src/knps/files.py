@@ -15,7 +15,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from .artifacts import read_all_csv_rows, read_file_artifact
 from .catalog import file_dataset, file_datasets
 from .config import KnpsConfig
-from .exceptions import KnpsRequestError, KnpsStorageError
+from .exceptions import KnpsParseError, KnpsRequestError, KnpsStorageError
 from .geometry import WGS84, extract_geometries
 from .models import (
     FileArtifact,
@@ -105,6 +105,13 @@ def _read_place_records(
         if shp_records is not None:
             return shp_records
 
+    if source_crs is not None:
+        raise KnpsParseError(
+            "source_crs is only supported for shelter SHP place records",
+            provider=dataset.provider,
+            endpoint=dataset.key,
+            failure_kind="geometry",
+        )
     _member, rows = read_all_csv_rows(data)
     return tuple(normalize_place_record(dataset.key, row) for row in rows)
 
@@ -422,7 +429,8 @@ class FileDataNamespace:
         대피소 중첩 SHP는 Point만 읽고 유효한 PRJ 또는 명시적 source_crs를
         요구한다. 전역 ID_CD/STN_ID는 보존하고 로컬 ID만 멤버 경로로 범위를
         한정한다. source_member에 출처를 남긴다. CSV 및 다른 dataset의 geometry
-        선택 의미는 변경하지 않는다.
+        선택 의미는 변경하지 않는다. SHP 외의 place 경로는 명시적 source_crs를
+        무시하지 않고 KnpsParseError로 거부한다.
         """
 
         dataset = file_dataset(key)

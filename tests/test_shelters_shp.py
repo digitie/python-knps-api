@@ -590,3 +590,114 @@ async def test_ignored_stale_shx_cannot_truncate_valid_physical_shp_and_dbf():
     rows = await _read(_zip(entries))
     assert [r.longitude for r in rows] == [127, 128]
     assert [r.raw["OBJECTID"] for r in rows] == ["1", "2"]
+
+
+@pytest.mark.parametrize(
+    "dataset,zipped",
+    [
+        ("knps_shelters", False),
+        ("knps_shelters", True),
+        ("knps_visitor_centers", False),
+    ],
+)
+async def test_explicit_source_crs_csv_fallback_rejected_before_csv_reader(
+    monkeypatch,
+    dataset,
+    zipped,
+):
+    from knps import files
+
+    payload = "국립공원관리번호,명칭,경도,위도\nA,기존CSV,127.5,37.5\n".encode()
+    if zipped:
+        payload = _zip({"data.csv": payload})
+
+    def must_not_read_csv(*args, **kwargs):
+        raise AssertionError("explicit source_crs reached CSV reader")
+
+    monkeypatch.setattr(files, "read_all_csv_rows", must_not_read_csv)
+
+    def respond(request):
+        return httpx.Response(200, content=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as session:
+        async with KnpsClient(session=session, max_rps=None) as client:
+            with pytest.raises(KnpsParseError):
+                await client.files.read_place_records(dataset, source_crs="EPSG:5179")
+
+
+@pytest.mark.parametrize(
+    "dataset,zipped",
+    [
+        ("knps_shelters", False),
+        ("knps_shelters", True),
+        ("knps_visitor_centers", False),
+    ],
+)
+async def test_none_source_crs_csv_fallback_control_unchanged(dataset, zipped):
+    payload = "국립공원관리번호,명칭,경도,위도\nA,기존CSV,127.5,37.5\n".encode()
+    if zipped:
+        payload = _zip({"data.csv": payload})
+
+    def respond(request):
+        return httpx.Response(200, content=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as session:
+        async with KnpsClient(session=session, max_rps=None) as client:
+            rows = await client.files.read_place_records(dataset, source_crs=None)
+    assert rows[0].source_id == "A"
+    assert (rows[0].longitude, rows[0].latitude) == (127.5, 37.5)
+
+
+def _null_then_point(*, deleted):
+    shp, shx, dbf = io.BytesIO(), io.BytesIO(), io.BytesIO()
+    with shapefile.Writer(
+        shp=shp,
+        shx=shx,
+        dbf=dbf,
+        shapeType=shapefile.POINT,
+    ) as writer:
+        writer.field("OBJECTID", "N")
+        writer.null()
+        writer.record(1)
+        writer.point(128, 38)
+        writer.record(2)
+    dbf_bytes = bytearray(dbf.getvalue())
+    if deleted:
+        header = int.from_bytes(dbf_bytes[8:10], "little")
+        dbf_bytes[header] = ord("*")
+    return {
+        "p.shp": shp.getvalue(),
+        "p.shx": shx.getvalue(),
+        "p.dbf": bytes(dbf_bytes),
+        "p.prj": CRS.from_epsg(4326).to_wkt().encode(),
+    }
+
+
+async def test_deleted_dbf_null_shape_is_skipped_without_losing_next_point():
+    rows = await _read(_zip(_null_then_point(deleted=True)))
+    assert len(rows) == 1
+    assert rows[0].raw["OBJECTID"] == "2"
+    assert (rows[0].longitude, rows[0].latitude) == (128, 38)
+
+
+async def test_active_dbf_null_shape_still_rejected():
+    with pytest.raises(KnpsParseError):
+        await _read(_zip(_null_then_point(deleted=False)))
+
+
+async def test_deleted_dbf_null_with_nonfour_byte_body_rejected_before_reader(monkeypatch):
+    entries = _layer()
+    shp = bytearray(entries["shelters.shp"])
+    shp[108:112] = b"\0\0\0\0"  # 원래 Point body 길이 20을 유지한 채 NULL로 위장
+    entries["shelters.shp"] = bytes(shp)
+    dbf = bytearray(entries["shelters.dbf"])
+    header = int.from_bytes(dbf[8:10], "little")
+    dbf[header] = ord("*")
+    entries["shelters.dbf"] = bytes(dbf)
+
+    def must_not_construct_reader(*args, **kwargs):
+        raise AssertionError("oversized NULL reached Reader")
+
+    monkeypatch.setattr(shapefile, "Reader", must_not_construct_reader)
+    with pytest.raises(KnpsParseError):
+        await _read(_zip(entries))

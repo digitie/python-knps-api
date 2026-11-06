@@ -75,9 +75,13 @@ def _validate_shp(dataset: FileDataset, data: bytes, budget: _Budget) -> tuple[i
         if record_kind not in (0, kind):
             raise _error(dataset, "shelter SHP record type disagrees with header")
         if kind in _POINT_TYPES:
-            # PointZ/M의 optional M 값은 허용하되 다른 크기/NULL은 Reader에 넘기지 않는다.
+            # NULL은 type만 담는 4 bytes여야 한다. DBF 삭제 여부는 뒤에서 판정한다.
+            # PointZ/M의 optional M 값 외의 크기는 Reader에 넘기지 않는다.
             valid_sizes = {1: (20,), 11: (28, 36), 21: (20, 28)}
-            if record_kind != kind or words * 2 not in valid_sizes[kind]:
+            if record_kind == 0:
+                if words * 2 != 4:
+                    raise _error(dataset, "invalid shelter NULL record body")
+            elif words * 2 not in valid_sizes[kind]:
                 raise _error(dataset, "invalid shelter Point record body")
         count += 1
         budget.records += 1

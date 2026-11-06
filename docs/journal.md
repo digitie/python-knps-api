@@ -5,6 +5,22 @@
 
 
 
+
+
+## 2026-11-07 삭제 행 NULL shape P2 보완
+
+- 사전 framing 검사에서 정확히 4 bytes인 NULL만 허용하도록 좁게 수정했다. 활성 행의 NULL 거부와 삭제 행 건너뛰기 순서는 유지했다.
+- 실패 우선 1 failed / 2 대조 passed. 최종 직접 실행 관련 129 passed (0.78초), non-live 177 passed / 17 deselected / 14 subtests passed (3.31초), Ruff/strict mypy 15개 파일 통과.
+- CSV 명시적 source_crs 오류, 전역 ID 보존, archive/record/framing 제한 및 geometry-only raw hash 회귀가 모두 포함된다.
+- 로그: /home/digitie/.cache/knps-17/shelters-deleted-null-*.log. src/tests 고정 및 미커밋·미푸시로 인계한다. provider/DB/운영 검증은 하지 않았다.
+
+## 2026-11-07 CSV source_crs P2 실제 코드 수정
+
+- 4fb61a2 이후 명시적 source_crs의 CSV fallback 무시를 실제 guard로 차단했다. SHP 결과가 없으면 CSV reader 진입 전에 KnpsParseError다.
+- 공개 호출 실패 우선: 대피소 plain CSV/CSV ZIP/다른 CSV dataset 3 failed, None 기본값 대조 3 passed. 비동기 thread offload 경로는 유지했다.
+- 직접 실행: 관련 126 passed (0.77초), non-live 174 passed / 17 deselected / 14 subtests passed (3.25초), Ruff와 strict mypy 15개 파일 통과.
+- 로그: /home/digitie/.cache/knps-17/shelters-csv-crs-*.log. src/tests 고정, 미커밋·미푸시로 부모에게 인계한다. provider/DB/운영 접근은 하지 않았다.
+
 ## 2026-11-07 물리 framing 보안 보완 체크포인트
 
 - 독립 리뷰 P1/P2를 반영했다. Reader 전에 SHP 길이/경계/양수 전진/물리 개수와 DBF header/stride/fields/count/실제 bytes를 검증한다. archive 전체 record 상한은 100,000이다.
