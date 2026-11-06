@@ -17,13 +17,15 @@ from .artifacts import _decode_zip_member_name
 from .exceptions import KnpsParseError
 from .geometry import _build_transform, _crs_from_prj, _import_pyshp, _stringify
 from .models import FileDataset, KnpsPlaceRecord
-from .records import normalize_place_record
+from .records import HeaderIndex, normalize_place_record
 
 # 중첩 ZIP 자체와 그 내용은 각각 누적 계산한다.
 _MAX_DEPTH = 3
 _MAX_MEMBERS = 10_000
 _MAX_MEMBER_BYTES = 256 * 1024 * 1024
 _MAX_TOTAL_BYTES = 512 * 1024 * 1024
+_MAX_RECORDS = 100_000
+_POINT_TYPES = frozenset({1, 11, 21})
 
 
 def _error(dataset: FileDataset, message: str) -> KnpsParseError:
@@ -36,6 +38,7 @@ def _error(dataset: FileDataset, message: str) -> KnpsParseError:
 class _Budget:
     members: int = 0
     unpacked: int = 0
+    records: int = 0
 
     def include(self, dataset: FileDataset, infos: list[zipfile.ZipInfo]) -> None:
         self.members += len(infos)
@@ -44,6 +47,74 @@ class _Budget:
             raise _error(dataset, "shelter archive exceeds cumulative member/byte limit")
         if any(info.file_size > _MAX_MEMBER_BYTES for info in infos):
             raise _error(dataset, "shelter archive member exceeds byte limit")
+
+
+def _validate_shp(dataset: FileDataset, data: bytes, budget: _Budget) -> tuple[int, int]:
+    """Reader 실행 전 물리 record framing을 상수 메모리로 순회한다."""
+    if (
+        len(data) < 100
+        or struct.unpack_from(">i", data, 0)[0] != 9994
+        or struct.unpack_from("<i", data, 28)[0] != 1000
+        or struct.unpack_from(">i", data, 24)[0] * 2 != len(data)
+    ):
+        raise _error(dataset, "invalid shelter SHP header/physical length")
+    kind = struct.unpack_from("<i", data, 32)[0]
+    position = 100
+    count = 0
+    while position < len(data):
+        if len(data) - position < 8:
+            raise _error(dataset, "truncated shelter SHP record header")
+        number, words = struct.unpack_from(">ii", data, position)
+        # 길이는 signed 16-bit words 단위다. 음수/0 또는 파일 밖 seek를 허용하지 않는다.
+        if number != count + 1 or words < 2:
+            raise _error(dataset, "invalid shelter SHP record framing")
+        end = position + 8 + words * 2
+        if end > len(data):
+            raise _error(dataset, "shelter SHP record exceeds physical bytes")
+        record_kind = struct.unpack_from("<i", data, position + 8)[0]
+        if record_kind not in (0, kind):
+            raise _error(dataset, "shelter SHP record type disagrees with header")
+        if kind in _POINT_TYPES:
+            # PointZ/M의 optional M 값은 허용하되 다른 크기/NULL은 Reader에 넘기지 않는다.
+            valid_sizes = {1: (20,), 11: (28, 36), 21: (20, 28)}
+            if record_kind != kind or words * 2 not in valid_sizes[kind]:
+                raise _error(dataset, "invalid shelter Point record body")
+        count += 1
+        budget.records += 1
+        if budget.records > _MAX_RECORDS:
+            raise _error(dataset, "shelter archive exceeds cumulative record limit")
+        position = end
+    return kind, count
+
+
+def _validate_dbf(dataset: FileDataset, data: bytes, physical_count: int) -> None:
+    """DBF 내부 count/stride를 신뢰하지 않고 실제 bytes와 descriptor 합을 비교한다."""
+    if len(data) < 33:
+        raise _error(dataset, "truncated shelter DBF header")
+    count = struct.unpack_from("<I", data, 4)[0]
+    header, stride = struct.unpack_from("<HH", data, 8)
+    if (
+        header < 65
+        or header > len(data)
+        or (header - 33) % 32
+        or stride < 2
+        or data[header - 1] != 0x0D
+    ):
+        raise _error(dataset, "invalid shelter DBF header/stride")
+    width = 1  # 삭제 flag
+    for offset in range(32, header - 1, 32):
+        field = data[offset : offset + 32]
+        if not field[:11].split(b"\0", 1)[0] or field[11] == 0 or field[16] == 0:
+            raise _error(dataset, "invalid shelter DBF field descriptor")
+        width += field[16]
+    if width != stride or count != physical_count:
+        raise _error(dataset, "shelter SHP/DBF count or stride mismatch")
+    expected = header + count * stride
+    if len(data) != expected and not (len(data) == expected + 1 and data[-1] == 0x1A):
+        raise _error(dataset, "shelter DBF count disagrees with physical bytes")
+    for offset in range(header, expected, stride):
+        if data[offset] not in (0x20, 0x2A):
+            raise _error(dataset, "invalid shelter DBF deletion flag")
 
 
 def _member_name(dataset: FileDataset, info: zipfile.ZipInfo) -> str:
@@ -107,7 +178,7 @@ def read_shelter_shp(
                 elif folded.endswith(".shp"):
                     found_shp = True
                     layer = _read_layer(
-                        dataset, archive, names, name, parents, source_crs=source_crs
+                        dataset, archive, names, name, parents, budget, source_crs=source_crs
                     )
                     for record in layer:
                         if record.source_id in identities:
@@ -134,16 +205,17 @@ def _read_layer(
     names: dict[str, zipfile.ZipInfo],
     name: str,
     parents: tuple[str, ...],
+    budget: _Budget,
     *,
     source_crs: str | None,
 ) -> list[KnpsPlaceRecord]:
     shapefile = _import_pyshp(dataset)
     shp = _read_member(archive, names[name.casefold()])
     try:
+        kind, physical_count = _validate_shp(dataset, shp, budget)
         # 부지 Polygon에는 DBF/CRS가 없어도 된다. Point에만 아래 계약을 요구한다.
-        with shapefile.Reader(shp=io.BytesIO(shp)) as header:
-            if header.shapeType not in (shapefile.POINT, shapefile.POINTZ, shapefile.POINTM):
-                return []
+        if kind not in _POINT_TYPES:
+            return []
 
         stem = name[:-4]
 
@@ -154,6 +226,7 @@ def _read_layer(
         dbf = sibling(".dbf")
         if dbf is None:
             raise _error(dataset, "Point shelter layer requires a DBF sidecar")
+        _validate_dbf(dataset, dbf, physical_count)
         resolved = source_crs or _crs_from_prj(sibling(".prj"))
         if resolved is None:
             raise _error(dataset, "Point shelter layer requires valid PRJ or source_crs")
@@ -164,11 +237,10 @@ def _read_layer(
             label = cpg.decode("utf-8-sig").strip()
             encoding = {"65001": "utf-8", "949": "cp949", "1252": "cp1252"}.get(label, label)
             codecs.lookup(encoding)
-        shx = sibling(".shx")
+        # SHX는 의도적으로 사용하지 않는다. 검증한 SHP 물리 record를 순차 읽는다.
         with shapefile.Reader(
             shp=io.BytesIO(shp),
             dbf=io.BytesIO(dbf),
-            shx=None if shx is None else io.BytesIO(shx),
             encoding=encoding,
             encodingErrors="strict",
         ) as reader:
@@ -199,12 +271,18 @@ def _read_layer(
                 raw = dict(zip(fields, (_stringify(value) for value in values), strict=True))
                 # DBF 영문 코드 해석만 명시적으로 활성화한다. 원본 key는 보존한다.
                 record = normalize_place_record(dataset.key, raw, bare_codes=True)
-                identity: list[object] = [*parents, name, record.source_id]
-                if record.source_id.startswith("row:"):
-                    identity.extend([x, y])
-                digest = hashlib.sha256(
-                    json.dumps(identity, ensure_ascii=False, separators=(",", ":")).encode()
-                ).hexdigest()
+                # 기존 normalizer가 전역 코드로 선택한 ID는 파일명과 무관하게 유지한다.
+                # 로컬 OBJECTID/SEQNO/NO 및 행 해시만 멤버별 namespace에 넣는다.
+                global_id = HeaderIndex(raw, bare_codes=True).lookup(("ID_CD", "STN_ID"), ())
+                source_id = record.source_id
+                if global_id is None or not global_id.strip() or global_id.strip() != source_id:
+                    identity: list[object] = [*parents, name, source_id]
+                    if source_id.startswith("row:"):
+                        identity.extend([x, y])
+                    digest = hashlib.sha256(
+                        json.dumps(identity, ensure_ascii=False, separators=(",", ":")).encode()
+                    ).hexdigest()
+                    source_id = f"shp:{digest}"
                 source_member = "!/".join((*parents, name))
                 # DBF 원본 필드는 유지하고 geometry-only 변경도 소비자의 raw hash에 반영한다.
                 provenance = {
@@ -218,7 +296,7 @@ def _read_layer(
                 records.append(
                     record.model_copy(
                         update={
-                            "source_id": f"shp:{digest}",
+                            "source_id": source_id,
                             "source_member": source_member,
                             "longitude": x,
                             "latitude": y,
@@ -226,7 +304,7 @@ def _read_layer(
                         }
                     )
                 )
-            if shape_count != reader.numRecords:
+            if shape_count != physical_count or shape_count != reader.numRecords:
                 raise _error(dataset, "shelter SHP/DBF record count mismatch")
             return records
     except KnpsParseError:

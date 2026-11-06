@@ -81,17 +81,27 @@ needs_verification이며 기존 다운로드 URL을 보존한다. 라이브 성�
 - DBF 영문 bare code는 대피소 경로에서만 bare_codes=True로 기존 normalizer에 연결한다.
   기존에 의미가 정의된 KOR_NM/ID_CD/OBJECTID 등의 후보만 정규화하고 새 필드는 추측하지 않는다.
   알 수 없는 속성은 raw에 남고 정규화 name은 None일 수 있다.
-- SHP source_id는 중첩 멤버 경로와 원래 식별자의 SHA256이다. 출처 경로는
-  source_member에 남긴다. 다른 멤버의 같은 OBJECTID/0 값은 합쳐지지 않는다.
-  같은 멤버의 중복 ID는 오류다. 식별자 없는 행은 속성 해시와 실제 좌표를 사용한다.
-  파일명 변경은 identity 변경이고, 실제 ID의 전역성·안정성을 확인했다고 주장하지 않는다.
+- 기존 normalizer가 선택한 전역 ID_CD/STN_ID는 source_id로 그대로 보존한다.
+  중첩 archive나 SHP 파일명이 바뀌어도 이 ID는 바뀌지 않는다.
+  전체 archive의 중복 전역 ID는 내용이 같더라도 오류다. 가짜 ID를 만들거나 덮어쓰지 않는다.
+- 로컬 OBJECTID/SEQNO/NO 및 식별자 없는 행만 멤버 경로와 원래 식별자의 SHA256으로
+  범위를 한정한다. 출처 경로는 source_member에 남긴다. 다른 멤버의 같은 로컬 ID/0 값은
+  합쳐지지 않는다. 같은 멤버의 중복 ID는 오류다. 식별자 없는 행은 속성 해시와 실제 좌표를
+  사용한다. 파일명 변경은 로컬 ID만 바꾸며, 실제 원천 ID의 품질을 검증했다고 주장하지 않는다.
 - 원래 DBF key/value는 raw에 그대로 두고 예약 key 세 개를 추가한다:
   __knps_point_wgs84__ (XY JSON), __knps_source_member__, __knps_source_crs__.
   소비자가 raw만 해시해도 geometry-only 변경을 감지한다. 실제 ID가 있으면 좌표만
   이동해도 source_id는 유지된다. 예약 key 충돌은 오류다.
-- DBF 삭제 행은 해당 번호의 Point와 함께 제외한다. SHP/DBF 개수가 다르면 부분 성공하지 않는다.
+- pyshp Reader 생성 전에 SHP header의 실제 길이, 각 record의 양수 길이·전진·경계,
+  Point body 크기와 물리 개수를 독립적으로 검증한다. DBF의 header/descriptor,
+  양수 stride와 필드 폭의 합, count와 실제 bytes, 삭제 flag도 먼저 검증한다.
+  SHP 물리 개수와 DBF count가 다르면 부분 성공하지 않는다.
+- SHX는 있더라도 읽지 않는다. 검증된 SHP 본문을 순차 읽으므로 오래된 SHX가
+  실제 Point를 숨기지 못한다. DBF 삭제 행은 해당 번호의 Point와 함께 제외한다.
 - 중첩 ZIP 깊이 최대 3(바깥 ZIP은 0), 총 멤버 10,000, 멤버당 256 MiB,
-  누적 해제 크기 512 MiB다. 중첩 ZIP 자체와 내부 멤버를 모두 누적 계산한다.
+  누적 해제 크기 512 MiB와 archive 전체 물리 SHP record 100,000개가 상한이다.
+  record 상한은 각 레이어를 Reader/typed record로 만들기 전에 검사한다.
+  중첩 ZIP 자체와 내부 멤버를 모두 누적 계산한다.
   경로 순회·모호한 대소문자 중복 경로는 거부하고 파일을 디스크에 추출하지 않는다.
 - 다른 dataset의 geometry 선택, CSV 전체 행 읽기, 비동기 thread offload는 그대로다.
   SHP-only bytes를 CSV 전용 read_all_csv_rows에 전달하면 계속 오류다.

@@ -7,7 +7,9 @@
 ### 대피소 SHP
 
 - 대피소의 중첩 ZIP에서 실제 Point 레이어만 typed place record로 읽는다.
-  PRJ/명시적 CRS, 엄격한 인코딩, archive 한계, 멤버별 ID와 geometry raw provenance를 적용한다.
+  PRJ/명시적 CRS, 엄격한 인코딩, archive 한계, 로컬 멤버별 ID와 geometry raw provenance를 적용한다.
+  전역 ID_CD/STN_ID는 보존하고 archive 전체의 중복 전역 ID는 거부한다.
+  외부 Reader 전에 SHP/DBF 물리 구조와 누적 record 수를 검증하고 SHX는 무시한다.
 - 다른 dataset의 CSV/geometry 계약은 유지한다. 실제 대피소 원천 필드·CRS는 미검증으로 남긴다.
   상세 계약과 한계는 docs/knps-api.md의 대피소 절을 참고한다.
 

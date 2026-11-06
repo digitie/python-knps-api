@@ -19,3 +19,18 @@ python-knps-api#17과 Map T-KNPS-DATA-GAPS의 남은 대피소를 처리한다. 
 - 기본 CSV와 다른 dataset의 첫 geometry/CSV 선택 계약은 유지한다. read_all_csv_rows는 SHP-only archive를 계속 거부한다.
 - 카탈로그 기존 URL과 데이터셋 키는 보존하고 needs_verification을 명시한다. 탐색한 전용 캐시·기존 체크아웃에서 대피소 원본은 발견하지 못했다. 실제 DBF 필드, PRJ, CPG, 공식 다운로드 원본과의 동일성은 미확인이다.
 - 독립 전문 리뷰 2건, 최종 exact SHA/CI, 소비 Map의 raw hash 회귀와 공식 원본 fixture 검증은 후속 단계다. 운영 적재·provider live 호출·완료 판정은 하지 않았다.
+
+## 2026-11-07 전역 식별자 리뷰 보완
+
+- 리뷰 P2 수용: 기존 normalizer의 전역 ID_CD/STN_ID까지 멤버 hash로 바뀌어 파일명 변경이 원천 identity를 바꾸던 문제를 수정했다.
+- 수정 전 공개 client 회귀 7 failed / 43 deselected를 확인했다. 경로 변경 ID 유지, 동일/상이 좌표의 전역 ID 중복 거부, geometry-only raw 변경을 포함한다.
+- 전역 ID는 원래 값을 유지하고, 로컬 OBJECTID/SEQNO/NO와 행 fallback만 멤버 경로로 scope한다. archive 전체 중복 전역 ID는 동일 내용이어도 fail-closed다.
+- 부모의 immutable 88 Map 소비 negative 4건은 별도 실행 증거다. 이 작업자는 upstream 테스트만 실행하며 Map 통과를 대신 주장하지 않는다.
+
+
+## 2026-11-07 SHP/DBF 물리 구조 보완
+
+- 독립 리뷰 P1/P2 수용: 음수 SHP 길이와 0 DBF stride/high count는 Reader sentinel로 안전하게 실패 우선 검증했다. 실제 위험 반복자는 기존 코드에서 실행하지 않았다.
+- 실제 parser로 오래된 SHX/DBF가 2개 SHP Point를 1개로 숨기는 문제도 확인했다. 수정 전 3 failed / 정상 no-SHX 1 passed다.
+- Reader 전에 독립 물리 framing 검증과 누적 record 100,000 상한을 적용한다. SHX는 무시하고 SHP를 순차 읽는다. valid no-SHX와 stale-SHX/정상 DBF는 실제 2개 Point를 모두 반환한다.
+- 최종 직접 검증: 관련 120 passed (0.82초), non-live 168 passed / 17 deselected / 14 subtests passed (3.30초), Ruff/strict mypy 15개 파일 통과. 전역 ID 보존과 기존 archive/raw hash 회귀도 포함한다.

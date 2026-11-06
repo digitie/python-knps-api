@@ -147,7 +147,17 @@ Polygon 중심점은 대피소 Point의 대체 근거가 되지 않는다. 따�
 중첩 Point 레이어를 모두 모으고, PRJ/명시적 CRS가 없는 좌표는 경위도로 제공하지 않는다.
 공통 geometry 추출기의 첫 레이어 선택과 CSV normalizer 기본값은 유지한다.
 
-파일 로컬 ID의 충돌을 피하기 위해 멤버 경로를 식별자에 포함한다. 실제 DBF 속성과
+기존 normalizer가 선택한 전역 ID_CD/STN_ID는 보존하고 archive 전체 중복을 거부한다.
+파일 로컬 ID와 식별자 없는 행만 충돌을 피하기 위해 멤버 경로를 식별자에 포함한다. 실제 DBF 속성과
 예약 geometry provenance를 raw에 함께 제공하여 downstream raw hash가 좌표 변경을 놓치지 않게 한다.
 실제 원천 필드·CRS는 합성 테스트로 검증할 수 없으므로 카탈로그 검증 상태는 보류한다.
 운영·적재 정책은 소비자와 운영 담당자의 책임이다.
+
+
+### D-006 보완: 외부 파서 앞의 물리 framing 경계
+
+pyshp의 SHX와 DBF count를 물리 SHP 개수의 근거로 삼지 않는다. Reader 생성 전에
+SHP의 실제 bytes/전진하는 record 길이와 DBF header/stride/descriptor/count를 검증하고
+archive 전체 record 수를 제한한다. SHX는 사용하지 않으며 실제 SHP를 순차 읽는다.
+이는 작은 손상 입력으로 반복자가 진행하지 않는 경우와 오래된 SHX의 누락을 막는다.
+위험 입력 회귀는 Reader 생성 sentinel로 실패 우선 검증하여 기존 파서를 무한 실행하지 않았다.

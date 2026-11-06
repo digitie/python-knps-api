@@ -3,6 +3,25 @@
 이 문서는 `python-knps-api` 프로젝트의 개발 기록과 주요 기술적 결정을 역시간순으로 관리한다.
 
 
+
+
+## 2026-11-07 물리 framing 보안 보완 체크포인트
+
+- 독립 리뷰 P1/P2를 반영했다. Reader 전에 SHP 길이/경계/양수 전진/물리 개수와 DBF header/stride/fields/count/실제 bytes를 검증한다. archive 전체 record 상한은 100,000이다.
+- 음수 길이/0 stride-high count는 Reader sentinel로만 기존 실패를 확인해 무한 반복·메모리 소모를 유발하지 않았다. stale SHX와 DBF가 SHP 2개를 1개로 숨기는 사례는 실제 parser 실패 우선 회귀다. 합계 3 failed / 정상 no-SHX 1 passed.
+- SHX를 전달하지 않고 검증한 SHP 물리 순서를 읽는다. 정상 SHP/DBF의 stale SHX 및 SHX 부재는 실제 2개 Point 반환으로 검증했다.
+- 직접 실행 결과: 관련 120 passed (0.82초), 전체 non-live 168 passed / 17 deselected / 14 subtests passed (3.30초), Ruff 전체와 strict mypy 15개 파일 통과.
+- 로그는 /home/digitie/.cache/knps-17/shelters-framing-*.log다. 기존 전역 ID 보존·중복 거부·raw geometry hash·archive 상한 회귀가 유지된다.
+- 공식 provider/DB/운영 접근 없이 합성 검증만 수행했다. 원천 needs_verification은 유지하며 미커밋으로 부모의 체크포인트/독립 재리뷰를 기다린다.
+
+## 2026-11-07 전역 식별자 리뷰 보완 체크포인트
+
+- 88f3957의 전역 ID 멤버 hash P2를 수정했다. 전역 ID_CD/STN_ID는 보존하고 로컬 ID/fallback만 scope한다. 중복 전역 ID는 archive 전체에서 오류다.
+- 수정 전 공개 client 회귀 7 failed / 43 deselected를 직접 확인했다. 수정 후 관련 99 passed (0.88초), non-live 147 passed / 17 deselected / 14 subtests passed (3.24초), Ruff와 strict mypy 15개 파일 통과다.
+- 로그: /home/digitie/.cache/knps-17/shelters-global-id-*.log. 기존 archive/CRS/raw hash 보호 회귀를 함께 실행했다.
+- 부모 Map의 immutable 88 소비 negative는 별도 증거다. 이 작업자는 Map 테스트·provider 호출·운영 검증을 실행하지 않았다. 실제 필드/CRS needs_verification은 유지한다.
+- src/tests 수정 완료 후 고정했으며 커밋·푸시는 부모가 진행한다.
+
 ## 2026-11-07 대피소 중첩 SHP 구현 체크포인트
 
 - 전용 ext4 작업트리에서 #17 구현을 미커밋으로 작성했다. 부모가 체크포인트 커밋·독립 리뷰를 진행한다.

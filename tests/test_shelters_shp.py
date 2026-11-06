@@ -30,6 +30,8 @@ def _layer(
     coords=(127.5, 37.5),
     objectid=1,
     name="한글 대피소",
+    global_field=None,
+    global_id="GLOBAL-A",
 ):
     shp, shx, dbf = io.BytesIO(), io.BytesIO(), io.BytesIO()
     with shapefile.Writer(
@@ -42,11 +44,16 @@ def _layer(
         writer.field("OBJECTID", "N", decimal=0)
         writer.field("KOR_NM", "C", size=80)
         writer.field("EXTRA", "C", size=80)
+        if global_field is not None:
+            writer.field(global_field, "C", size=40)
         if polygon:
             writer.poly([[(127, 37), (127, 38), (128, 38), (127, 37)]])
         else:
             writer.point(*coords)
-        writer.record(objectid, name, "미확인 속성")
+        values = [objectid, name, "미확인 속성"]
+        if global_field is not None:
+            values.append(global_id)
+        writer.record(*values)
     entries = {
         stem + ".shp": shp.getvalue(),
         stem + ".shx": shx.getvalue(),
@@ -395,3 +402,191 @@ def test_only_shelter_catalog_place_operation_adds_source_crs():
 
     assert params("knps_shelters") == {"source_crs", "max_bytes"}
     assert params("knps_visitor_centers") == {"max_bytes"}
+
+
+@pytest.mark.parametrize("global_field", ["ID_CD", "STN_ID"])
+async def test_global_id_survives_renamed_archive_and_layer(global_field):
+    original = await _read(_zip({"old.zip": _zip(_layer("old/PT", global_field=global_field))}))
+    renamed = await _read(_zip({"new.zip": _zip(_layer("new/PT", global_field=global_field))}))
+    assert original[0].source_id == renamed[0].source_id == "GLOBAL-A"
+    assert original[0].source_member != renamed[0].source_member
+    assert original[0].raw["__knps_source_member__"] != renamed[0].raw["__knps_source_member__"]
+
+
+@pytest.mark.parametrize("global_field", ["ID_CD", "STN_ID"])
+@pytest.mark.parametrize("coords", [(127.5, 37.5), (128, 38)])
+async def test_duplicate_global_id_across_members_is_fail_closed(global_field, coords):
+    payload = _zip(
+        {
+            "a.zip": _zip(_layer(global_field=global_field)),
+            "b.zip": _zip(_layer(global_field=global_field, coords=coords)),
+        }
+    )
+    with pytest.raises(KnpsParseError, match="duplicate"):
+        await _read(payload)
+
+
+async def test_global_identity_survives_geometry_only_change_with_raw_delta():
+    original = (await _read(_zip(_layer(global_field="ID_CD"))))[0]
+    moved = (await _read(_zip(_layer(global_field="ID_CD", coords=(128, 38)))))[0]
+    assert original.source_id == moved.source_id == "GLOBAL-A"
+    assert original.raw != moved.raw
+
+
+@pytest.mark.parametrize("corruption", ["negative_shp_length", "zero_dbf_stride"])
+async def test_malicious_framing_is_rejected_before_any_reader(monkeypatch, corruption):
+    entries = _layer()
+    del entries["shelters.shx"]
+    if corruption == "negative_shp_length":
+        import struct
+
+        shp = bytearray(entries["shelters.shp"])
+        shp[104:108] = struct.pack(">i", -4)
+        entries["shelters.shp"] = bytes(shp)
+    else:
+        dbf = bytearray(entries["shelters.dbf"])
+        dbf[4:8] = (0xFFFFFFFF).to_bytes(4, "little")
+        dbf[10:12] = b"\0\0"
+        entries["shelters.dbf"] = bytes(dbf)
+
+    def must_not_construct_reader(*args, **kwargs):
+        raise AssertionError("unsafe framing reached pyshp.Reader")
+
+    monkeypatch.setattr(shapefile, "Reader", must_not_construct_reader)
+    with pytest.raises(KnpsParseError):
+        await _read(_zip(entries))
+
+
+async def test_stale_shx_and_shortened_dbf_do_not_hide_second_physical_point():
+    entries = _two_points()
+    shx = bytearray(entries["p.shx"][:108])
+    shx[24:28] = (54).to_bytes(4, "big")
+    entries["p.shx"] = bytes(shx)
+    dbf = bytearray(entries["p.dbf"])
+    header = int.from_bytes(dbf[8:10], "little")
+    stride = int.from_bytes(dbf[10:12], "little")
+    dbf[4:8] = (1).to_bytes(4, "little")
+    entries["p.dbf"] = bytes(dbf[: header + stride])
+    with pytest.raises(KnpsParseError):
+        await _read(_zip(entries))
+
+
+async def test_valid_two_physical_points_without_shx_are_read_in_order():
+    entries = _two_points()
+    del entries["p.shx"]
+    rows = await _read(_zip(entries))
+    assert [r.longitude for r in rows] == [127, 128]
+    assert [r.raw["OBJECTID"] for r in rows] == ["1", "2"]
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    [
+        "shp_file_length",
+        "shp_magic",
+        "shp_version",
+        "shp_zero_record_length",
+        "shp_record_outside_file",
+        "shp_wrong_point_body",
+        "shp_trailing_record_header",
+        "dbf_header_length",
+        "dbf_header_terminator",
+        "dbf_zero_field_width",
+        "dbf_stride_mismatch",
+        "dbf_huge_count",
+        "dbf_truncated_body",
+        "dbf_trailing_garbage",
+    ],
+)
+async def test_structural_corruption_rejected_before_reader(monkeypatch, corruption):
+    import struct
+
+    entries = _layer()
+    if corruption.startswith("shp_"):
+        data = bytearray(entries["shelters.shp"])
+        if corruption == "shp_file_length":
+            data[24:28] = (50).to_bytes(4, "big")
+        elif corruption == "shp_magic":
+            data[0:4] = b"\0" * 4
+        elif corruption == "shp_version":
+            data[28:32] = b"\0" * 4
+        elif corruption == "shp_zero_record_length":
+            data[104:108] = b"\0" * 4
+        elif corruption == "shp_record_outside_file":
+            data[104:108] = struct.pack(">i", 0x7FFFFFFF)
+        elif corruption == "shp_wrong_point_body":
+            data[108:112] = (5).to_bytes(4, "little")
+        elif corruption == "shp_trailing_record_header":
+            data.extend(b"\0\0")
+            data[24:28] = (len(data) // 2).to_bytes(4, "big")
+        entries["shelters.shp"] = bytes(data)
+    else:
+        data = bytearray(entries["shelters.dbf"])
+        header = int.from_bytes(data[8:10], "little")
+        if corruption == "dbf_header_length":
+            data[8:10] = (65535).to_bytes(2, "little")
+        elif corruption == "dbf_header_terminator":
+            data[header - 1] = 0
+        elif corruption == "dbf_zero_field_width":
+            data[32 + 16] = 0
+        elif corruption == "dbf_stride_mismatch":
+            stride = int.from_bytes(data[10:12], "little")
+            data[10:12] = (stride + 1).to_bytes(2, "little")
+        elif corruption == "dbf_huge_count":
+            data[4:8] = (0xFFFFFFFF).to_bytes(4, "little")
+        elif corruption == "dbf_truncated_body":
+            del data[-5:]
+        elif corruption == "dbf_trailing_garbage":
+            data.extend(b"garbage")
+        entries["shelters.dbf"] = bytes(data)
+
+    def must_not_construct_reader(*args, **kwargs):
+        raise AssertionError("invalid structure reached pyshp.Reader")
+
+    monkeypatch.setattr(shapefile, "Reader", must_not_construct_reader)
+    with pytest.raises(KnpsParseError):
+        await _read(_zip(entries))
+
+
+async def test_cumulative_record_limit_checked_before_materializing_layer(monkeypatch):
+    from knps import place_shp
+
+    payload = _zip(_two_points())
+    monkeypatch.setattr(place_shp, "_MAX_RECORDS", 1)
+
+    def must_not_construct_reader(*args, **kwargs):
+        raise AssertionError("record budget must precede Reader")
+
+    monkeypatch.setattr(shapefile, "Reader", must_not_construct_reader)
+    with pytest.raises(KnpsParseError, match="record limit"):
+        await _read(payload)
+
+
+async def test_record_limit_shared_by_nested_layers_before_second_reader(monkeypatch):
+    from knps import place_shp
+
+    payload = _zip({"a.zip": _zip(_layer()), "b.zip": _zip(_layer())})
+    monkeypatch.setattr(place_shp, "_MAX_RECORDS", 1)
+    real_reader = shapefile.Reader
+    calls = []
+
+    def reader_once(*args, **kwargs):
+        calls.append(1)
+        if len(calls) > 1:
+            raise AssertionError("second layer must fail budget before Reader")
+        return real_reader(*args, **kwargs)
+
+    monkeypatch.setattr(shapefile, "Reader", reader_once)
+    with pytest.raises(KnpsParseError, match="record limit"):
+        await _read(payload)
+    assert len(calls) == 1
+
+
+async def test_ignored_stale_shx_cannot_truncate_valid_physical_shp_and_dbf():
+    entries = _two_points()
+    shx = bytearray(entries["p.shx"][:108])
+    shx[24:28] = (54).to_bytes(4, "big")
+    entries["p.shx"] = bytes(shx)
+    rows = await _read(_zip(entries))
+    assert [r.longitude for r in rows] == [127, 128]
+    assert [r.raw["OBJECTID"] for r in rows] == ["1", "2"]
