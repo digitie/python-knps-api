@@ -213,6 +213,8 @@ class KnpsPlaceRecord(KnpsModel):
 
     dataset_key: str
     source_id: str
+    # 중첩 SHP 출처 경로. CSV는 None이며 raw 필드와 충돌하지 않는다.
+    source_member: str | None = None
     name: str | None = None
     name_en: str | None = None
     longitude: float | None = None

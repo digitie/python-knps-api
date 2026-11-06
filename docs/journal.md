@@ -2,6 +2,52 @@
 
 이 문서는 `python-knps-api` 프로젝트의 개발 기록과 주요 기술적 결정을 역시간순으로 관리한다.
 
+
+
+
+
+
+## 2026-11-07 삭제 행 NULL shape P2 보완
+
+- 사전 framing 검사에서 정확히 4 bytes인 NULL만 허용하도록 좁게 수정했다. 활성 행의 NULL 거부와 삭제 행 건너뛰기 순서는 유지했다.
+- 실패 우선 1 failed / 2 대조 passed. 최종 직접 실행 관련 129 passed (0.78초), non-live 177 passed / 17 deselected / 14 subtests passed (3.31초), Ruff/strict mypy 15개 파일 통과.
+- CSV 명시적 source_crs 오류, 전역 ID 보존, archive/record/framing 제한 및 geometry-only raw hash 회귀가 모두 포함된다.
+- 로그: /home/digitie/.cache/knps-17/shelters-deleted-null-*.log. src/tests 고정 및 미커밋·미푸시로 인계한다. provider/DB/운영 검증은 하지 않았다.
+
+## 2026-11-07 CSV source_crs P2 실제 코드 수정
+
+- 4fb61a2 이후 명시적 source_crs의 CSV fallback 무시를 실제 guard로 차단했다. SHP 결과가 없으면 CSV reader 진입 전에 KnpsParseError다.
+- 공개 호출 실패 우선: 대피소 plain CSV/CSV ZIP/다른 CSV dataset 3 failed, None 기본값 대조 3 passed. 비동기 thread offload 경로는 유지했다.
+- 직접 실행: 관련 126 passed (0.77초), non-live 174 passed / 17 deselected / 14 subtests passed (3.25초), Ruff와 strict mypy 15개 파일 통과.
+- 로그: /home/digitie/.cache/knps-17/shelters-csv-crs-*.log. src/tests 고정, 미커밋·미푸시로 부모에게 인계한다. provider/DB/운영 접근은 하지 않았다.
+
+## 2026-11-07 물리 framing 보안 보완 체크포인트
+
+- 독립 리뷰 P1/P2를 반영했다. Reader 전에 SHP 길이/경계/양수 전진/물리 개수와 DBF header/stride/fields/count/실제 bytes를 검증한다. archive 전체 record 상한은 100,000이다.
+- 음수 길이/0 stride-high count는 Reader sentinel로만 기존 실패를 확인해 무한 반복·메모리 소모를 유발하지 않았다. stale SHX와 DBF가 SHP 2개를 1개로 숨기는 사례는 실제 parser 실패 우선 회귀다. 합계 3 failed / 정상 no-SHX 1 passed.
+- SHX를 전달하지 않고 검증한 SHP 물리 순서를 읽는다. 정상 SHP/DBF의 stale SHX 및 SHX 부재는 실제 2개 Point 반환으로 검증했다.
+- 직접 실행 결과: 관련 120 passed (0.82초), 전체 non-live 168 passed / 17 deselected / 14 subtests passed (3.30초), Ruff 전체와 strict mypy 15개 파일 통과.
+- 로그는 /home/digitie/.cache/knps-17/shelters-framing-*.log다. 기존 전역 ID 보존·중복 거부·raw geometry hash·archive 상한 회귀가 유지된다.
+- 공식 provider/DB/운영 접근 없이 합성 검증만 수행했다. 원천 needs_verification은 유지하며 미커밋으로 부모의 체크포인트/독립 재리뷰를 기다린다.
+
+## 2026-11-07 전역 식별자 리뷰 보완 체크포인트
+
+- 88f3957의 전역 ID 멤버 hash P2를 수정했다. 전역 ID_CD/STN_ID는 보존하고 로컬 ID/fallback만 scope한다. 중복 전역 ID는 archive 전체에서 오류다.
+- 수정 전 공개 client 회귀 7 failed / 43 deselected를 직접 확인했다. 수정 후 관련 99 passed (0.88초), non-live 147 passed / 17 deselected / 14 subtests passed (3.24초), Ruff와 strict mypy 15개 파일 통과다.
+- 로그: /home/digitie/.cache/knps-17/shelters-global-id-*.log. 기존 archive/CRS/raw hash 보호 회귀를 함께 실행했다.
+- 부모 Map의 immutable 88 소비 negative는 별도 증거다. 이 작업자는 Map 테스트·provider 호출·운영 검증을 실행하지 않았다. 실제 필드/CRS needs_verification은 유지한다.
+- src/tests 수정 완료 후 고정했으며 커밋·푸시는 부모가 진행한다.
+
+## 2026-11-07 대피소 중첩 SHP 구현 체크포인트
+
+- 전용 ext4 작업트리에서 #17 구현을 미커밋으로 작성했다. 부모가 체크포인트 커밋·독립 리뷰를 진행한다.
+- 수정 전 합성 public client 회귀 6 failed / 5 passed. 이후 DBF 개수 불일치·삭제 행 좌표 밀림 2 failed, geometry-only raw 불변 1 failed를 추가 확인한 뒤 수정했다.
+- 최종 WSL 직접 검증: 관련 92 passed (0.85초), 전체 non-live 140 passed / 17 deselected / 14 subtests passed (3.16초), Ruff 전체 통과, strict mypy src/knps 15개 파일 통과.
+- pytest-asyncio의 기존 fixture loop scope 미설정 경고는 유지했다. 메인 설정이나 다른 dataset의 의미를 바꾸지 않았다.
+- 로그는 /home/digitie/.cache/knps-17/shelters-* 에 보관했다. 실제 provider 호출·운영 접근·다운로드 원본 검증은 하지 않았다.
+- 기존 체크아웃/전용 캐시에서 대피소 원본을 찾지 못했다. 실제 DBF 필드·PRJ·CPG와 ID 안정성은 공식 fixture 검증 대기이며 카탈로그는 needs_verification이다.
+- src/tests는 이 검증 이후 고정했다. Map 소비 회귀·독립 리뷰 2건·정확 HEAD CI·운영 재적재는 후속 범위다.
+
 ## 2026-09-14 TPS 통합 검증 완료
 
 - 기존 고정 요청 간격 제한을 토큰 버킷으로 교체했다. 일반 응답과 스트리밍 모두 재시도마다 토큰을 소비한다.
