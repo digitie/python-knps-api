@@ -420,8 +420,9 @@ class FileDataNamespace:
         으로 필드를 추출하며, 실제 식별자가 없는 행도 버리지 않고 행 해시
         ``source_id``로 보존한다.
         대피소 중첩 SHP는 Point만 읽고 유효한 PRJ 또는 명시적 source_crs를
-        요구한다. SHP source_id는 멤버 경로로 범위를 한정하며 source_member에
-        출처를 남긴다. CSV 및 다른 dataset의 geometry 선택 의미는 변경하지 않는다.
+        요구한다. 전역 ID_CD/STN_ID는 보존하고 로컬 ID만 멤버 경로로 범위를
+        한정한다. source_member에 출처를 남긴다. CSV 및 다른 dataset의 geometry
+        선택 의미는 변경하지 않는다.
         """
 
         dataset = file_dataset(key)
