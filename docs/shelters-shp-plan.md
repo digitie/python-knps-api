@@ -9,3 +9,13 @@ python-knps-api#17과 Map T-KNPS-DATA-GAPS의 남은 대피소를 처리한다. 
 초안 PR을 먼저 만들고 중간 커밋을 원격에 저장한다. WSL에서 중첩 SHP의 Point 레이어와 polygon 부지를 섞은 최소 synthetic archive로 현행 실패를 재현한 뒤 공개 read_place_records가 Point만 typed record로 반환하도록 보완한다. 좌표계·한글 속성·출처 식별자·형식 오류와 CSV 기존 동작을 함께 검증한다. 실제 확인되지 않은 원천 의미나 좌표계를 추정하지 않는다.
 
 수정 전 CodeGraph 영향도를 확인하고 전체 non-live 테스트·ruff·strict mypy·실제 적용 CI와 두 독립 전문 적대 리뷰를 마친 뒤 PR로 병합한다. 실제 운영 적재·DB/SSH·provider live 호출은 수행하지 않고, Claude Code가 재적재와 Pinvi 최종 UI를 확인할 수 있도록 절차와 미검증 항목을 기록한다.
+
+## 2026-11-07 구현 체크포인트 (미커밋)
+
+- 변경은 이 전용 ext4 작업트리의 src/tests/docs 및 CHANGELOG에 한정한다. 다른 Code의 정책·스케줄·작업트리를 수정하지 않는다.
+- 기존 코드에서 합성 공개 client 회귀 6개 실패·5개 통과를 먼저 기록했다. 실패 원인은 중첩 다중 SHP·CPG·CRS 입력 경로의 부재이며, 실제 provider 실패를 재현했다고 주장하지 않는다.
+- 구현 중 DBF 행 개수 불일치·삭제 행 좌표 밀림 2개와 geometry-only raw payload 불변 1개를 추가 실패로 확인한 뒤 수정했다.
+- 대피소 경로만 중첩 ZIP의 모든 Point/PointZ/PointM XY를 읽는다. Polygon/MultiPoint/선형 레이어를 대피소 대표점으로 바꾸지 않는다. SHP가 있으나 유효 Point가 없으면 0건 성공 대신 KnpsParseError다.
+- 기본 CSV와 다른 dataset의 첫 geometry/CSV 선택 계약은 유지한다. read_all_csv_rows는 SHP-only archive를 계속 거부한다.
+- 카탈로그 기존 URL과 데이터셋 키는 보존하고 needs_verification을 명시한다. 탐색한 전용 캐시·기존 체크아웃에서 대피소 원본은 발견하지 못했다. 실제 DBF 필드, PRJ, CPG, 공식 다운로드 원본과의 동일성은 미확인이다.
+- 독립 전문 리뷰 2건, 최종 exact SHA/CI, 소비 Map의 raw hash 회귀와 공식 원본 fixture 검증은 후속 단계다. 운영 적재·provider live 호출·완료 판정은 하지 않았다.

@@ -24,6 +24,7 @@ from .models import (
     KnpsGeoRecord,
     KnpsPlaceRecord,
 )
+from .place_shp import read_shelter_shp
 from .records import (
     geometry_to_wkt,
     normalize_geo_record,
@@ -91,13 +92,18 @@ def _assemble_line_records(
 
 
 def _read_place_records(
-    dataset: FileDataset, data: bytes
+    dataset: FileDataset, data: bytes, *, source_crs: str | None = None
 ) -> tuple[KnpsPlaceRecord, ...]:
-    """CSV bytes를 typed place record로 정규화한다 (동기, CPU-bound).
+    """CSV 또는 대피소 SHP bytes를 typed place record로 정규화한다.
 
     `asyncio.to_thread`로만 호출한다 — 전체 CSV 파싱 + 행별 정규화가
     이벤트 루프를 막을 만큼 무거울 수 있다(#9 knps_trails 실측 참고).
     """
+
+    if dataset.key == "knps_shelters":
+        shp_records = read_shelter_shp(dataset, data, source_crs=source_crs)
+        if shp_records is not None:
+            return shp_records
 
     _member, rows = read_all_csv_rows(data)
     return tuple(normalize_place_record(dataset.key, row) for row in rows)
@@ -405,18 +411,24 @@ class FileDataNamespace:
         key: str,
         *,
         max_bytes: int | None = None,
+        source_crs: str | None = None,
     ) -> tuple[KnpsPlaceRecord, ...]:
-        """point CSV dataset을 다운로드해 typed :class:`KnpsPlaceRecord`로 정규화한다.
+        """Point dataset을 다운로드해 typed :class:`KnpsPlaceRecord`로 정규화한다.
 
         preview가 아니라 첫 CSV member의 **모든 행**을 읽는다. 행 단위로
         :func:`knps.records.normalize_place_record`가 코드 우선 → 순한글 fallback
         으로 필드를 추출하며, 실제 식별자가 없는 행도 버리지 않고 행 해시
         ``source_id``로 보존한다.
+        대피소 중첩 SHP는 Point만 읽고 유효한 PRJ 또는 명시적 source_crs를
+        요구한다. SHP source_id는 멤버 경로로 범위를 한정하며 source_member에
+        출처를 남긴다. CSV 및 다른 dataset의 geometry 선택 의미는 변경하지 않는다.
         """
 
         dataset = file_dataset(key)
         data = await self._fetch_dataset_bytes(dataset, max_bytes=max_bytes)
-        return await asyncio.to_thread(_read_place_records, dataset, data)
+        return await asyncio.to_thread(
+            _read_place_records, dataset, data, source_crs=source_crs
+        )
 
     async def read_geo_records(
         self,

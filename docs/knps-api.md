@@ -58,3 +58,48 @@ KNPS는 현재 이 라이브러리에서 OpenAPI catalog를 제공하지 않는�
 
 - 생태 연구용 식생도, 멸종위기종 서식지는 v1 feature provider 범위 밖이다. 보안/마스킹 정책이 먼저 필요하다.
 - 예약 결제, 실시간 예약 가능 여부는 KNPS 예약 시스템 정책과 robots/login 흐름 확인 전까지 제외한다.
+
+## 대피소 중첩 SHP (2026-11-07)
+
+issue #17의 대피소 읽기는 CSV뿐 아니라 ZIP 안의 중첩 ZIP/SHP도 지원한다.
+이 절은 합성 fixture로 검증한 파서 계약이며 실제 KNPS 필드·좌표계 검증이 아니다.
+기존 표의 대피소 CSV 표기는 과거 카탈로그 기록이다. 현재 대피소 항목은
+needs_verification이며 기존 다운로드 URL을 보존한다. 라이브 성공이나 운영 적재를 뜻하지 않는다.
+
+    records = await client.files.read_place_records("knps_shelters")
+    # PRJ가 없을 때만 공식 근거로 확인한 CRS를 호출자가 명시한다.
+    # records = await client.files.read_place_records(
+    #     "knps_shelters", source_crs=officially_verified_source_crs
+    # )
+
+- Point/PointZ/PointM의 XY만 WGS84 경위도로 제공한다. 부지 Polygon, MultiPoint,
+  선형 레이어를 중심점으로 대체하지 않는다. Point가 없는 SHP archive는 오류다.
+- 유효한 PRJ 또는 명시적 source_crs가 필수다. 없거나 잘못되면 거부한다.
+  원본 숫자가 경위도처럼 보인다는 이유로 CRS를 추정하지 않는다. 명시적 CRS는 PRJ보다 우선한다.
+- CPG가 있으면 해당 인코딩을 엄격히 적용한다. CPG가 없으면 기존 SHP 경로와 같은
+  CP949를 사용하되 대체 문자로 복구하지 않는다. 실제 원천 인코딩 확인은 필요하다.
+- DBF 영문 bare code는 대피소 경로에서만 bare_codes=True로 기존 normalizer에 연결한다.
+  기존에 의미가 정의된 KOR_NM/ID_CD/OBJECTID 등의 후보만 정규화하고 새 필드는 추측하지 않는다.
+  알 수 없는 속성은 raw에 남고 정규화 name은 None일 수 있다.
+- SHP source_id는 중첩 멤버 경로와 원래 식별자의 SHA256이다. 출처 경로는
+  source_member에 남긴다. 다른 멤버의 같은 OBJECTID/0 값은 합쳐지지 않는다.
+  같은 멤버의 중복 ID는 오류다. 식별자 없는 행은 속성 해시와 실제 좌표를 사용한다.
+  파일명 변경은 identity 변경이고, 실제 ID의 전역성·안정성을 확인했다고 주장하지 않는다.
+- 원래 DBF key/value는 raw에 그대로 두고 예약 key 세 개를 추가한다:
+  __knps_point_wgs84__ (XY JSON), __knps_source_member__, __knps_source_crs__.
+  소비자가 raw만 해시해도 geometry-only 변경을 감지한다. 실제 ID가 있으면 좌표만
+  이동해도 source_id는 유지된다. 예약 key 충돌은 오류다.
+- DBF 삭제 행은 해당 번호의 Point와 함께 제외한다. SHP/DBF 개수가 다르면 부분 성공하지 않는다.
+- 중첩 ZIP 깊이 최대 3(바깥 ZIP은 0), 총 멤버 10,000, 멤버당 256 MiB,
+  누적 해제 크기 512 MiB다. 중첩 ZIP 자체와 내부 멤버를 모두 누적 계산한다.
+  경로 순회·모호한 대소문자 중복 경로는 거부하고 파일을 디스크에 추출하지 않는다.
+- 다른 dataset의 geometry 선택, CSV 전체 행 읽기, 비동기 thread offload는 그대로다.
+  SHP-only bytes를 CSV 전용 read_all_csv_rows에 전달하면 계속 오류다.
+
+### 후속 원천 확인
+
+Claude가 공식 원본을 확보할 때 원본/멤버 지문, DBF 헤더와 한글 값, PRJ/CPG,
+실제 Point 수와 Polygon 제외 수를 기록해야 한다. 합성 필드가 원천에 있다고 가정하지 않는다.
+검증된 멤버·ID의 안정성과 좌표 의미를 확인한 뒤에만 카탈로그 검증 상태를 승격한다.
+Map은 병합된 provider를 소비하고 동일 ID의 좌표 변경이 raw payload hash에 반영되는지
+검증한다. 이 변경은 새 dataset 정책·운영 schedule·적재를 제공하지 않는다.

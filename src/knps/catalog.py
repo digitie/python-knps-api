@@ -149,13 +149,18 @@ def dataset_operations(dataset: FileDataset) -> tuple[DatasetOperation, ...]:
                 DatasetOperation(
                     key="read_place_records",
                     label="Normalize to KnpsPlaceRecord rows",
-                    description="point CSV 전체 행을 typed KnpsPlaceRecord로 정규화한다.",
+                    description="Point CSV 또는 대피소 중첩 SHP를 typed record로 정규화한다.",
                     params=(
                         OperationParam(
                             "max_bytes",
                             "int",
                             help="다운로드를 자를 최대 byte 수(선택).",
                         ),
+                    ) + (
+                        (OperationParam(
+                            "source_crs", "str",
+                            help="대피소 SHP의 원본 좌표계(공식 근거가 있을 때만 명시).",
+                        ),) if dataset.key == "knps_shelters" else ()
                     ),
                 )
             )
@@ -329,7 +334,8 @@ FILE_DATASETS: tuple[FileDataset, ...] = (
         geometry_type="Point",
         feature_kind="place",
         update_cycle="irregular",
-        verification_status="verified",
+        verification_status="needs_verification",
+        notes="기존 다운로드 URL은 보존. 중첩 SHP Point의 실제 헤더·PRJ·CPG 검증 대기",
     ),
     FileDataset(
         key="knps_linear_facilities",

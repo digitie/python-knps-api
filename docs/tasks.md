@@ -12,3 +12,5 @@
 - [x] T-006: RustFS(S3 호환) 연동 및 로컬 이중 저장 구현
 
 - [x] T-007: 공통 AsyncTokenBucket·전체 HTTP TPS 적용, 적대적 리뷰 2인 및 live E2E 검증.
+
+- [ ] T-008: #17 대피소 중첩 SHP Point 파서: 합성 실패 우선 구현 완료, 공식 원천 검증·Map 소비 회귀·독립 리뷰 2건·최종 CI 대기.

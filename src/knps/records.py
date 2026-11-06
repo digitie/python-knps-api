@@ -36,6 +36,7 @@ from .models import Geometry, KnpsGeoRecord, KnpsPlaceRecord
 
 # header 끝의 ``(영문코드)`` 접미사. 첫 글자는 ASCII 영문이어야 해서
 # ``(한글)``/``(영문)`` 같은 순한글 괄호는 코드로 오인하지 않는다.
+_BARE_CODE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 _CODE_SUFFIX = re.compile(r"\(([A-Za-z][A-Za-z0-9_ ]*)\)\s*$")
 
 # 필드별 후보. 코드(대문자, 대소문자 무시 매칭) 우선 → 순한글 header fallback.
@@ -75,7 +76,7 @@ class HeaderIndex:
 
     __slots__ = ("by_code", "by_full", "by_base")
 
-    def __init__(self, raw: Mapping[str, str | None]) -> None:
+    def __init__(self, raw: Mapping[str, str | None], *, bare_codes: bool = False) -> None:
         # 코드(대문자) → value, 순한글 full header → value,
         # 코드 접미사를 떼어낸 base header → value.
         self.by_code: dict[str, str | None] = {}
@@ -92,6 +93,8 @@ class HeaderIndex:
                 if base:
                     self.by_base.setdefault(base, value)
             else:
+                if bare_codes and _BARE_CODE.fullmatch(stripped):
+                    self.by_code.setdefault(stripped.upper(), value)
                 self.by_base.setdefault(stripped, value)
 
     def lookup(self, codes: tuple[str, ...], korean: tuple[str, ...]) -> str | None:
@@ -142,14 +145,19 @@ def _resolve_source_id(index: HeaderIndex, raw: Mapping[str, str | None]) -> str
 def normalize_place_record(
     dataset_key: str,
     raw: Mapping[str, str | None],
+    *,
+    bare_codes: bool = False,
 ) -> KnpsPlaceRecord:
     """header→value 매핑을 :class:`KnpsPlaceRecord`로 정규화한다.
+
+    bare_codes=True는 SHP DBF의 접미사 없는 영문 코드를 명시적으로 허용한다.
+    기본 CSV 코드/순한글 경로는 그대로 유지한다.
 
     실제 식별자가 없는 행도 버리지 않고 행 내용 해시(``row:...``)를
     ``source_id``로 채워서 보존한다.
     """
 
-    index = HeaderIndex(raw)
+    index = HeaderIndex(raw, bare_codes=bare_codes)
     return KnpsPlaceRecord(
         dataset_key=dataset_key,
         source_id=_resolve_source_id(index, raw),

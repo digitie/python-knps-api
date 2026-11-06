@@ -2,6 +2,17 @@
 
 이 문서는 `python-knps-api` 프로젝트의 개발 기록과 주요 기술적 결정을 역시간순으로 관리한다.
 
+
+## 2026-11-07 대피소 중첩 SHP 구현 체크포인트
+
+- 전용 ext4 작업트리에서 #17 구현을 미커밋으로 작성했다. 부모가 체크포인트 커밋·독립 리뷰를 진행한다.
+- 수정 전 합성 public client 회귀 6 failed / 5 passed. 이후 DBF 개수 불일치·삭제 행 좌표 밀림 2 failed, geometry-only raw 불변 1 failed를 추가 확인한 뒤 수정했다.
+- 최종 WSL 직접 검증: 관련 92 passed (0.85초), 전체 non-live 140 passed / 17 deselected / 14 subtests passed (3.16초), Ruff 전체 통과, strict mypy src/knps 15개 파일 통과.
+- pytest-asyncio의 기존 fixture loop scope 미설정 경고는 유지했다. 메인 설정이나 다른 dataset의 의미를 바꾸지 않았다.
+- 로그는 /home/digitie/.cache/knps-17/shelters-* 에 보관했다. 실제 provider 호출·운영 접근·다운로드 원본 검증은 하지 않았다.
+- 기존 체크아웃/전용 캐시에서 대피소 원본을 찾지 못했다. 실제 DBF 필드·PRJ·CPG와 ID 안정성은 공식 fixture 검증 대기이며 카탈로그는 needs_verification이다.
+- src/tests는 이 검증 이후 고정했다. Map 소비 회귀·독립 리뷰 2건·정확 HEAD CI·운영 재적재는 후속 범위다.
+
 ## 2026-09-14 TPS 통합 검증 완료
 
 - 기존 고정 요청 간격 제한을 토큰 버킷으로 교체했다. 일반 응답과 스트리밍 모두 재시도마다 토큰을 소비한다.
