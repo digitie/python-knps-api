@@ -17,8 +17,8 @@
   `FILE_000000003681543`(_20230928, 평면 SHP 22 Point, UTF-8, EPSG:5186)으로 바꾸고
   `formats=("SHP",)`, `verified`로 올렸다. 이전 URL은 2013년 8건짜리 파일이었다.
 - 현재 배포본의 DBF 필드명은 10 bytes에서 잘린 UTF-8 한글이다. 필드명 끝의 불완전 시퀀스만
-  제거하고(값과 이름 중간 byte는 계속 strict), 대피소 전용 필드 `시설물명`·`위치.주소`·`순번`을
-  name·jibun_address·로컬 ID로 매핑한다.
+  제거하고(값과 이름 중간 byte는 계속 strict), 대피소 전용 필드 `시설물명`·`순번`을 name·로컬 ID로,
+  도로명/지번이 섞인 `위치.주소`를 형태에 따라 road_address/jibun_address로 매핑한다.
 - archive의 모든 Point가 이름을 얻지 못하면 DBF 필드 목록과 함께 `KnpsParseError`를 낸다.
 
 

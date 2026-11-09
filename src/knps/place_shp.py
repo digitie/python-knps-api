@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import math
+import re
 import struct
 import unicodedata
 import zipfile
@@ -35,6 +36,8 @@ _SHELTER_NAME_FIELDS = ("시설물명", "시설물")
 _SHELTER_ADDRESS_FIELDS = ("위치.주소", "위치.주")
 # 파일 로컬 일련번호다. 전역 ID가 아니므로 아래에서 멤버 범위로 hash한다.
 _SHELTER_LOCAL_ID_FIELDS = ("순번",)
+# 도로명주소: 도로명(…로/…길, "번길" 포함) 뒤에 건물번호가 온다. 지번의 "산 1-12"와 구분된다.
+_ROAD_ADDRESS = re.compile(r"[가-힣0-9](?:로|길)\s*\d")
 
 
 def _error(dataset: FileDataset, message: str) -> KnpsParseError:
@@ -166,10 +169,12 @@ def _apply_shelter_fields(
         if name is not None:
             updates["name"] = name
     if record.road_address is None and record.jibun_address is None:
-        # 원천 열 하나에 도로명/지번이 섞여 있다. 일반 "주소" 열과 같은 자리에 둔다.
+        # 원천 열 하나에 도로명/지번이 섞여 있다. "…로 373"/"…길 1"처럼 도로명+건물번호
+        # 형태면 도로명, 아니면 지번으로 둔다. 원문은 raw에 그대로 남는다.
         address = index.lookup((), _SHELTER_ADDRESS_FIELDS)
         if address is not None:
-            updates["jibun_address"] = address
+            key = "road_address" if _ROAD_ADDRESS.search(address) else "jibun_address"
+            updates[key] = address
     if record.source_id.startswith("row:"):
         local = index.lookup((), _SHELTER_LOCAL_ID_FIELDS)
         if local is not None and local.strip():

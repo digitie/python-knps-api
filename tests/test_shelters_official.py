@@ -54,13 +54,19 @@ async def test_current_official_archive_yields_all_named_shelters():
     assert {"중청대피소", "장터목대피소", "세석대피소", "희운각대피소"} <= names
     assert all(row.name for row in rows)
     for row in rows:
-        # PRJ 재투영 결과가 DBF에 함께 실린 경도/위도와 맞아야 한다(소수 6자리 반올림).
-        assert math.isclose(row.longitude, float(row.raw["경도"]), abs_tol=2e-4)
-        assert math.isclose(row.latitude, float(row.raw["위도"]), abs_tol=2e-4)
-        assert row.jibun_address
+        # PRJ 재투영 결과는 DBF에 함께 실린 경도/위도와 사실상 같다(실측 차 1.4e-14°).
+        # 1e-6°(약 0.1 m)는 원점·투영 parameter의 수 m 오차도 잡는다.
+        assert math.isclose(row.longitude, float(row.raw["경도"]), abs_tol=1e-6)
+        assert math.isclose(row.latitude, float(row.raw["위도"]), abs_tol=1e-6)
+        assert (row.road_address is None) != (row.jibun_address is None)
         assert row.source_id.startswith("shp:")
-    jangteomok = next(row for row in rows if row.name == "장터목대피소")
-    assert jangteomok.jibun_address == "경남 함양군 마천면 백무동로 373"
+    by_name = {row.name: row for row in rows}
+    jangteomok = by_name["장터목대피소"]
+    assert jangteomok.road_address == "경남 함양군 마천면 백무동로 373"
+    assert jangteomok.jibun_address is None
+    assert by_name["세석대피소"].jibun_address == "경남 산청군시천면 내대리 산325"
+    assert by_name["중청대피소"].road_address == "강원도 양양군 대청봉길 1"
+    assert by_name["노인봉무인대피소"].jibun_address == "강릉시 연곡면 삼산리 산1-12"
     # 잘린 필드명은 디코딩 가능한 접두부로 보존한다(원본 provenance).
     assert jangteomok.raw["시설물"] == "장터목대피소"
     assert jangteomok.raw["순번"] == "421"
@@ -69,10 +75,26 @@ async def test_current_official_archive_yields_all_named_shelters():
     assert jangteomok.raw["__knps_source_crs__"] == "EPSG:5186"
 
 
+def _current_with_first_point_moved(dx: float) -> bytes:
+    with zipfile.ZipFile(CURRENT) as archive:
+        entries = {info.filename: archive.read(info) for info in archive.infolist()}
+    shp_name = next(name for name in entries if name.endswith(".shp"))
+    shp = bytearray(entries[shp_name])
+    # 첫 record: header 100 + record header 8 + shape type 4 → X(double, little-endian).
+    (x,) = struct.unpack_from("<d", shp, 112)
+    struct.pack_into("<d", shp, 112, x + dx)
+    entries[shp_name] = bytes(shp)
+    return _zip(entries)
+
+
 async def test_current_official_identity_is_local_sequence_not_coordinates():
     rows = await _read(CURRENT.read_bytes())
-    again = await _read(CURRENT.read_bytes())
-    assert [row.source_id for row in rows] == [row.source_id for row in again]
+    moved = await _read(_current_with_first_point_moved(30.0))
+    assert [row.source_id for row in rows] == [row.source_id for row in moved]
+    assert rows[0].longitude != moved[0].longitude
+    # 좌표만 바뀐 갱신도 raw hash로 감지된다.
+    assert rows[0].raw != moved[0].raw
+    assert rows[1:] == moved[1:]
 
 
 async def test_legacy_2013_archive_keeps_global_id_cd():

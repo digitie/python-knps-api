@@ -13,6 +13,7 @@
 - 포털의 현재 배포본은 FILE_000000003681543(_20230928, 2026-07-25 갱신)이다. 평면 SHP 22건, CPG UTF-8, PRJ EPSG:5186. #18 파서는 DBF 필드명 10 bytes 잘림(`시설물\xeb`) 때문에 이 파일을 strict 디코딩 오류로 거부했다. 이름·주소·ID 필드도 normalizer 별칭에 없었다.
 - 수정: 필드명 끝의 불완전 시퀀스만 제거, 대피소 전용 별칭(시설물명/위치.주소/순번), 모든 Point가 이름이 없으면 필드 목록과 함께 실패, 카탈로그를 현재 배포본·SHP·verified로 갱신. 원본 두 파일을 fixture로 두었다.
 - 실패 우선: 새 회귀 8건 중 5 failed / 대조 3 passed. 수정 후 대피소·카탈로그 98 passed, non-live 185 passed / 17 deselected / 14 subtests, ruff·mypy --strict 통과.
+- 적대 리뷰 2인(파서 무결성 / Map 소비 계약) 무차단. 반영: 좌표 허용오차 2e-4°→1e-6°(실측 1.4e-14°), identity 테스트를 실제 좌표 이동으로 강화, 혼합 주소 열을 도로명/지번으로 분류. Map은 핀 bump만 필요(주소·tel 미사용, category는 dataset spec).
 - 합성 framing fixture 중 이름 없는 레이어는 새 실패 규칙에 맞춰 ASCII 이름 필드를 추가했다(검사 의도는 그대로).
 
 ## 2026-11-07 삭제 행 NULL shape P2 보완
