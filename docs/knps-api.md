@@ -38,7 +38,7 @@ KNPS는 현재 이 라이브러리에서 OpenAPI catalog를 제공하지 않는�
 | `knps_restrooms` | 국립공원공단_국립공원 화장실 공간데이터_20141219 | `15003468` | CSV | Point | place |
 | `knps_cultural_resources` | 국립공원공단_국립공원 문화자원 공간데이터_20141219 | `15003443` | CSV | Point | place |
 | `knps_campgrounds` | 국립공원공단_국립공원 야영장 공간데이터_20141219 | `15003469` | CSV | Point | place |
-| `knps_shelters` | 국립공원공단_국립공원 대피소_20131102 | `2982556` | CSV | Point | place |
+| `knps_shelters` | 국립공원공단_국립공원 대피소_20230928 | `2982556` | SHP | Point | place |
 | `knps_park_offices` | 국립공원 공원사무소 공간데이터_20180813 | `15003440` | CSV | Point | place |
 | `knps_linear_facilities` | 국립공원공단_국립공원 선형시설_20181231 | `15091972` | CSV | LineString | route |
 | `knps_basic_statistics` | 국립공원공단_국립공원기본통계2020 | `15087598` | CSV | n/a | timeseries |
@@ -62,9 +62,8 @@ KNPS는 현재 이 라이브러리에서 OpenAPI catalog를 제공하지 않는�
 ## 대피소 중첩 SHP (2026-11-07)
 
 issue #17의 대피소 읽기는 CSV뿐 아니라 ZIP 안의 중첩 ZIP/SHP도 지원한다.
-이 절은 합성 fixture로 검증한 파서 계약이며 실제 KNPS 필드·좌표계 검증이 아니다.
-기존 표의 대피소 CSV 표기는 과거 카탈로그 기록이다. 현재 대피소 항목은
-needs_verification이며 기존 다운로드 URL을 보존한다. 라이브 성공이나 운영 적재를 뜻하지 않는다.
+아래 목록은 합성 fixture로 고정한 파서 계약이다. 실제 공식 원본 확인 결과는
+"공식 원천 확인 (2026-11-09)" 절에 있다. 운영 적재 성공을 뜻하지 않는다.
 
     records = await client.files.read_place_records("knps_shelters")
     # PRJ가 없을 때만 공식 근거로 확인한 CRS를 호출자가 명시한다.
@@ -110,10 +109,36 @@ needs_verification이며 기존 다운로드 URL을 보존한다. 라이브 성�
 - 다른 dataset의 geometry 선택, CSV 전체 행 읽기, 비동기 thread offload는 그대로다.
   SHP-only bytes를 CSV 전용 read_all_csv_rows에 전달하면 계속 오류다.
 
-### 후속 원천 확인
+### 공식 원천 확인 (2026-11-09)
 
-Claude가 공식 원본을 확보할 때 원본/멤버 지문, DBF 헤더와 한글 값, PRJ/CPG,
-실제 Point 수와 Polygon 제외 수를 기록해야 한다. 합성 필드가 원천에 있다고 가정하지 않는다.
-검증된 멤버·ID의 안정성과 좌표 의미를 확인한 뒤에만 카탈로그 검증 상태를 승격한다.
+data.go.kr 2982556의 현재 배포본과 이전 카탈로그 URL을 직접 받아 확인했다. 두 파일 원본은
+`tests/fixtures/shelters/`에 그대로 두었고(작아서 자르지 않음, 이용허락범위 제한 없음)
+`tests/test_shelters_official.py`가 회귀를 고정한다. 카탈로그는 현재 배포본으로 바꾸고 verified로 올렸다.
+
+| 항목 | 현재 배포본 | 이전 URL(2013) |
+| --- | --- | --- |
+| 포털 파일명 / 갱신 | 국립공원공단_국립공원 대피소_20230928 / 2026-07-25 (publicDataHistSn 7) | _20131102 |
+| atchFileId | `FILE_000000003681543` | `FILE_000000000377005` |
+| bytes / SHA256 | 4,820 / `3c73d523d53e0892…62c1100cde4193ef73a24bcb980a8cdfc9` | 18,845 / `7be2d9075c881864…6519e862298b0ac` |
+| 구조 | 평면 ZIP: `국립공원_대피소.{shp,shx,dbf,prj,cpg,qmd}` | 중첩 ZIP: PT2~PT6 + PG.ZIP(안에 PG2~6 ZIP) |
+| Point 수 | 22 (지리산 8·설악산 5·덕유산 2·오대산 1·북한산 5·소백산 1) | 8 (한라산 7·오대산 1; PT3/5/6은 0건) |
+| CPG / PRJ | UTF-8 / KGD2002 Central Belt 2010 (EPSG:5186) | 없음(CP949) / ITRF2000 TM CM127 FE200000 FN600000 (5186과 같은 투영) |
+| ID | `순번`(421~442, 파일 로컬) — 전역 ID 없음 | `ID_CD`(전역) |
+
+- 현재 배포본 DBF 필드: `fid`, `순번`, `사무소`, `시설물명`→`시설물`, `위치.주소`→`위치.주`,
+  `경도`, `위도`, `연면적.`, `시설물_`(값 "대피소"), `시공년도`→`시공년`. dBASE 필드명 10 bytes
+  한계로 UTF-8 한글 이름이 문자 중간에서 잘려 있다(`시설물\xeb`). 값은 정상 UTF-8이다.
+  대피소 경로는 필드명 **끝의 불완전 다중 바이트 시퀀스만** 떼어낸다. 이름 중간의 잘못된 byte와
+  모든 값은 계속 strict로 디코딩해 거부한다. raw key는 잘린 접두부(`시설물` 등)로 보존한다.
+- 대피소 전용 필드 매핑(일반 CSV normalizer에는 넣지 않는다): name←`시설물명`/`시설물`,
+  jibun_address←`위치.주소`/`위치.주`(도로명·지번이 섞인 한 열), 로컬 ID←`순번`.
+  `순번`은 전역 ID가 아니므로 멤버 경로와 함께 SHA256(`shp:…`)으로 범위를 한정한다.
+  좌표는 identity에 넣지 않는다. 파일명(`국립공원_대피소.shp`)이 바뀌면 source_id가 바뀐다.
+- 재투영 결과는 DBF의 `경도`/`위도`(소수 6자리)와 2e-4° 안에서 일치한다. 동봉된 QGIS `.qmd`는
+  EPSG:5179라고 적혀 있지만 좌표·PRJ와 맞지 않으므로 사용하지 않는다(PRJ가 정본).
+- 스키마가 바뀌어 archive의 모든 Point가 이름을 못 얻으면 `KnpsParseError`
+  ("no recognizable shelter name field … DBF fields=[…]")로 실패한다. 이름 없는 N건을 성공으로
+  넘기지 않는다. 일부 행만 이름이 없으면 그 행은 name=None으로 남는다.
+- 포털은 같은 dataset에 CSV를 별도로 올리지 않았다(확장자 SHP, OpenAPI 없음).
 Map은 병합된 provider를 소비하고 동일 ID의 좌표 변경이 raw payload hash에 반영되는지
 검증한다. 이 변경은 새 dataset 정책·운영 schedule·적재를 제공하지 않는다.

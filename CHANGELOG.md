@@ -11,8 +11,15 @@
   전역 ID_CD/STN_ID는 보존하고 archive 전체의 중복 전역 ID는 거부한다.
   외부 Reader 전에 SHP/DBF 물리 구조와 누적 record 수를 검증하고 SHX는 무시한다.
   SHP 이외 place 경로에서는 명시적 source_crs를 무시하지 않고 오류로 거부한다.
-- 다른 dataset의 CSV/geometry 계약은 유지한다. 실제 대피소 원천 필드·CRS는 미검증으로 남긴다.
+- 다른 dataset의 CSV/geometry 계약은 유지한다.
   상세 계약과 한계는 docs/knps-api.md의 대피소 절을 참고한다.
+- 공식 원본 확인(#17): `knps_shelters` 카탈로그를 포털 현재 배포본
+  `FILE_000000003681543`(_20230928, 평면 SHP 22 Point, UTF-8, EPSG:5186)으로 바꾸고
+  `formats=("SHP",)`, `verified`로 올렸다. 이전 URL은 2013년 8건짜리 파일이었다.
+- 현재 배포본의 DBF 필드명은 10 bytes에서 잘린 UTF-8 한글이다. 필드명 끝의 불완전 시퀀스만
+  제거하고(값과 이름 중간 byte는 계속 strict), 대피소 전용 필드 `시설물명`·`위치.주소`·`순번`을
+  name·jibun_address·로컬 ID로 매핑한다.
+- archive의 모든 Point가 이름을 얻지 못하면 DBF 필드 목록과 함께 `KnpsParseError`를 낸다.
 
 
 ### TPS 제어 변경
