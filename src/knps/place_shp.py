@@ -7,9 +7,11 @@ import hashlib
 import io
 import json
 import math
+import re
 import struct
 import unicodedata
 import zipfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
@@ -26,6 +28,16 @@ _MAX_MEMBER_BYTES = 256 * 1024 * 1024
 _MAX_TOTAL_BYTES = 512 * 1024 * 1024
 _MAX_RECORDS = 100_000
 _POINT_TYPES = frozenset({1, 11, 21})
+
+# 2023-09-28 공식 배포본(FILE_000000003681543)의 순한글 DBF 필드. 10 bytes 필드명
+# 한계로 "시설물명"→"시설물", "위치.주소"→"위치.주"처럼 잘려 있다. 일반 CSV normalizer의
+# 별칭에 넣지 않는다: 다른 dataset의 같은 이름 열(예: 순번=행 번호)의 identity가 바뀐다.
+_SHELTER_NAME_FIELDS = ("시설물명", "시설물")
+_SHELTER_ADDRESS_FIELDS = ("위치.주소", "위치.주")
+# 파일 로컬 일련번호다. 전역 ID가 아니므로 아래에서 멤버 범위로 hash한다.
+_SHELTER_LOCAL_ID_FIELDS = ("순번",)
+# 도로명주소: 도로명(…로/…길, "번길" 포함) 뒤에 건물번호가 온다. 지번의 "산 1-12"와 구분된다.
+_ROAD_ADDRESS = re.compile(r"[가-힣0-9](?:로|길)\s*\d")
 
 
 def _error(dataset: FileDataset, message: str) -> KnpsParseError:
@@ -121,6 +133,55 @@ def _validate_dbf(dataset: FileDataset, data: bytes, physical_count: int) -> Non
             raise _error(dataset, "invalid shelter DBF deletion flag")
 
 
+def _trim_truncated_field_names(dataset: FileDataset, data: bytes, encoding: str) -> bytes:
+    """DBF 필드명 끝에서 잘린 다중 바이트 문자만 떼어낸다.
+
+    dBASE 필드명은 10 bytes 고정이라 UTF-8/CP949 한글 이름이 문자 중간에서 잘린다
+    (공식 2023 대피소 DBF의 ``시설물\\xeb``). 끝의 불완전 시퀀스만 제거하고, 이름 중간의
+    잘못된 byte는 그대로 둬서 Reader의 strict 디코딩이 거부하게 한다. 값은 건드리지 않는다.
+    """
+    header = struct.unpack_from("<H", data, 8)[0]
+    patched = bytearray(data)
+    for offset in range(32, header - 1, 32):
+        name = bytes(patched[offset : offset + 11]).split(b"\0", 1)[0]
+        decoder = codecs.getincrementaldecoder(encoding)("strict")
+        try:
+            decoder.decode(name, final=False)
+        except UnicodeDecodeError:
+            continue
+        pending = len(decoder.getstate()[0])
+        if pending:
+            kept = name[: len(name) - pending]
+            if not kept:
+                raise _error(dataset, "shelter DBF field name is only a truncated character")
+            patched[offset : offset + 11] = kept.ljust(11, b"\0")
+    return bytes(patched)
+
+
+def _apply_shelter_fields(
+    record: KnpsPlaceRecord, raw: Mapping[str, str | None]
+) -> KnpsPlaceRecord:
+    """기존 normalizer가 못 찾은 필드만 대피소 전용 순한글 DBF 필드로 채운다."""
+    index = HeaderIndex(raw, bare_codes=True)
+    updates: dict[str, str] = {}
+    if record.name is None:
+        name = index.lookup((), _SHELTER_NAME_FIELDS)
+        if name is not None:
+            updates["name"] = name
+    if record.road_address is None and record.jibun_address is None:
+        # 원천 열 하나에 도로명/지번이 섞여 있다. "…로 373"/"…길 1"처럼 도로명+건물번호
+        # 형태면 도로명, 아니면 지번으로 둔다. 원문은 raw에 그대로 남는다.
+        address = index.lookup((), _SHELTER_ADDRESS_FIELDS)
+        if address is not None:
+            key = "road_address" if _ROAD_ADDRESS.search(address) else "jibun_address"
+            updates[key] = address
+    if record.source_id.startswith("row:"):
+        local = index.lookup((), _SHELTER_LOCAL_ID_FIELDS)
+        if local is not None and local.strip():
+            updates["source_id"] = local.strip()
+    return record.model_copy(update=updates) if updates else record
+
+
 def _member_name(dataset: FileDataset, info: zipfile.ZipInfo) -> str:
     name = unicodedata.normalize("NFC", _decode_zip_member_name(info).replace("\\", "/"))
     parts = name.split("/")
@@ -157,6 +218,7 @@ def read_shelter_shp(
     budget = _Budget()
     records: list[KnpsPlaceRecord] = []
     identities: set[str] = set()
+    fields_seen: set[str] = set()
     found_shp = False
 
     def visit(payload: bytes, parents: tuple[str, ...], depth: int) -> None:
@@ -182,7 +244,14 @@ def read_shelter_shp(
                 elif folded.endswith(".shp"):
                     found_shp = True
                     layer = _read_layer(
-                        dataset, archive, names, name, parents, budget, source_crs=source_crs
+                        dataset,
+                        archive,
+                        names,
+                        name,
+                        parents,
+                        budget,
+                        source_crs=source_crs,
+                        fields_seen=fields_seen,
                     )
                     for record in layer:
                         if record.source_id in identities:
@@ -200,6 +269,13 @@ def read_shelter_shp(
         return None
     if not records:
         raise _error(dataset, "no usable Point shelter records in SHP archive")
+    if not any(record.name for record in records):
+        # 원천 스키마가 바뀌면 이름 없는 시설 N건을 '성공'으로 넘기지 않는다.
+        raise _error(
+            dataset,
+            "no recognizable shelter name field in Point layers; "
+            f"DBF fields={sorted(fields_seen)}",
+        )
     return tuple(records)
 
 
@@ -212,6 +288,7 @@ def _read_layer(
     budget: _Budget,
     *,
     source_crs: str | None,
+    fields_seen: set[str],
 ) -> list[KnpsPlaceRecord]:
     shapefile = _import_pyshp(dataset)
     shp = _read_member(archive, names[name.casefold()])
@@ -241,6 +318,7 @@ def _read_layer(
             label = cpg.decode("utf-8-sig").strip()
             encoding = {"65001": "utf-8", "949": "cp949", "1252": "cp1252"}.get(label, label)
             codecs.lookup(encoding)
+        dbf = _trim_truncated_field_names(dataset, dbf, encoding)
         # SHX는 의도적으로 사용하지 않는다. 검증한 SHP 물리 record를 순차 읽는다.
         with shapefile.Reader(
             shp=io.BytesIO(shp),
@@ -251,6 +329,7 @@ def _read_layer(
             fields = [field[0] for field in reader.fields[1:]]
             if len({field.casefold() for field in fields}) != len(fields):
                 raise _error(dataset, "duplicate shelter DBF field names")
+            fields_seen.update(fields)
             records: list[KnpsPlaceRecord] = []
             shape_count = 0
             for index, shape in enumerate(reader.iterShapes()):
@@ -274,7 +353,9 @@ def _read_layer(
                     raise _error(dataset, "invalid WGS84 shelter Point")
                 raw = dict(zip(fields, (_stringify(value) for value in values), strict=True))
                 # DBF 영문 코드 해석만 명시적으로 활성화한다. 원본 key는 보존한다.
-                record = normalize_place_record(dataset.key, raw, bare_codes=True)
+                record = _apply_shelter_fields(
+                    normalize_place_record(dataset.key, raw, bare_codes=True), raw
+                )
                 # 기존 normalizer가 전역 코드로 선택한 ID는 파일명과 무관하게 유지한다.
                 # 로컬 OBJECTID/SEQNO/NO 및 행 해시만 멤버별 namespace에 넣는다.
                 global_id = HeaderIndex(raw, bare_codes=True).lookup(("ID_CD", "STN_ID"), ())

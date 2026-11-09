@@ -323,19 +323,23 @@ FILE_DATASETS: tuple[FileDataset, ...] = (
     ),
     FileDataset(
         key="knps_shelters",
-        title="국립공원공단_국립공원 대피소_20131102",
+        title="국립공원공단_국립공원 대피소_20230928",
         data_go_id="2982556",
         categories=("facility", "safety", "spatial"),
-        formats=("CSV",),
+        formats=("SHP",),
         detail_url=f"{DATA_GO_BASE}/2982556/fileData.do",
-        description="국립공원 대피소/산장 point 공간데이터 후보.",
+        description="국립공원 대피소 point 공간데이터(SHP ZIP).",
         direct_download=True,
-        download_url=_download_url("FILE_000000000377005"),
+        # 2026-07-25 포털 갱신본(publicDataHistSn 7). 이전 2013 파일은 FILE_000000000377005.
+        download_url=_download_url("FILE_000000003681543"),
         geometry_type="Point",
         feature_kind="place",
         update_cycle="irregular",
-        verification_status="needs_verification",
-        notes="기존 다운로드 URL은 보존. 중첩 SHP Point의 실제 헤더·PRJ·CPG 검증 대기",
+        verification_status="verified",
+        notes=(
+            "2026-11-09 공식 원본 확인: 평면 SHP 22 Point, CPG UTF-8, "
+            "PRJ KGD2002 Central Belt 2010, DBF 필드명 10 bytes 잘림(시설물·위치.주·순번)"
+        ),
     ),
     FileDataset(
         key="knps_linear_facilities",

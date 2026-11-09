@@ -261,21 +261,23 @@ def test_bare_codes_are_explicit_and_original_properties_are_preserved():
     assert shp.raw == raw == legacy.raw
 
 
-def test_catalog_does_not_claim_synthetic_fields_verified():
+def test_catalog_verification_rests_on_official_fixture_not_synthetic_fields():
+    # verified 근거는 tests/test_shelters_official.py의 공식 원본 fixture다.
     from knps.catalog import file_dataset
 
     shelters = file_dataset("knps_shelters")
-    assert shelters.verification_status == "needs_verification"
-    assert shelters.download_url  # 이전 다운로드 URL은 그대로 보존
+    assert shelters.verification_status == "verified"
+    assert shelters.download_url
 
 
 def _two_points():
     shp, shx, dbf = io.BytesIO(), io.BytesIO(), io.BytesIO()
     with shapefile.Writer(shp=shp, shx=shx, dbf=dbf) as writer:
         writer.field("OBJECTID", "N")
+        writer.field("KOR_NM", "C")
         for x, identity in ((127, 1), (128, 2)):
             writer.point(x, 37)
-            writer.record(identity)
+            writer.record(identity, f"shelter-{identity}")
     return {
         "p.shp": shp.getvalue(),
         "p.shx": shx.getvalue(),
@@ -326,11 +328,12 @@ async def test_point_z_and_m_use_actual_xy_only(shape_type):
     shp, shx, dbf = io.BytesIO(), io.BytesIO(), io.BytesIO()
     with shapefile.Writer(shp=shp, shx=shx, dbf=dbf, shapeType=shape_type) as writer:
         writer.field("OBJECTID", "N")
+        writer.field("KOR_NM", "C")
         if shape_type == shapefile.POINTZ:
             writer.pointz(127, 37, 1200)
         else:
             writer.pointm(127, 37, 1200)
-        writer.record(1)
+        writer.record(1, "shelter")
     rows = await _read(
         _zip(
             {
@@ -357,9 +360,13 @@ async def test_anonymous_points_with_identical_attributes_do_not_collapse():
     shp, shx, dbf = io.BytesIO(), io.BytesIO(), io.BytesIO()
     with shapefile.Writer(shp=shp, shx=shx, dbf=dbf) as writer:
         writer.field("UNKNOWN", "C")
+        writer.field("KOR_NM", "C")
         for x in (127, 128):
             writer.point(x, 37)
-            writer.record("same")
+            writer.record("same", "")
+        # 이름 없는 행만 있는 archive는 스키마 변경으로 거부된다(아래 test 참고).
+        writer.point(129, 37)
+        writer.record("named", "shelter")
     rows = await _read(
         _zip(
             {
@@ -369,8 +376,8 @@ async def test_anonymous_points_with_identical_attributes_do_not_collapse():
             }
         )
     )
-    assert len({r.source_id for r in rows}) == 2
-    assert all(r.name is None for r in rows)
+    assert len({r.source_id for r in rows}) == 3
+    assert [r.name for r in rows] == [None, None, "shelter"]
 
 
 async def test_other_dataset_keeps_existing_csv_member_selection():
@@ -657,10 +664,11 @@ def _null_then_point(*, deleted):
         shapeType=shapefile.POINT,
     ) as writer:
         writer.field("OBJECTID", "N")
+        writer.field("KOR_NM", "C")
         writer.null()
-        writer.record(1)
+        writer.record(1, "deleted")
         writer.point(128, 38)
-        writer.record(2)
+        writer.record(2, "shelter")
     dbf_bytes = bytearray(dbf.getvalue())
     if deleted:
         header = int.from_bytes(dbf_bytes[8:10], "little")
