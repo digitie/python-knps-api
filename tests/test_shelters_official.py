@@ -98,9 +98,10 @@ async def test_current_official_name_drops_leading_hyeon_marker_but_raw_keeps_it
     ],
 )
 async def test_leading_status_marker_is_stripped_only_as_a_prefix(value, expected):
-    rows = await _read(_zip(_utf8_layer("시설물명".encode(), value)))
+    # 공식 DBF처럼 10 bytes에서 잘린 "시설물명" 필드 → raw key "시설물".
+    rows = await _read(_zip(_utf8_layer("시설물명".encode()[:10], value)))
     assert rows[0].name == expected
-    assert rows[0].raw["시설물명"] == value
+    assert rows[0].raw["시설물"] == value
 
 
 def _current_with_first_point_moved(dx: float) -> bytes:
