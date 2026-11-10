@@ -80,7 +80,7 @@ async def test_current_official_name_drops_leading_hyeon_marker_but_raw_keeps_it
     rows = await _read(CURRENT.read_bytes())
     names = {row.name for row in rows}
     assert "노고단대피소" in names
-    assert not any(name and name[0] in "現舊" for name in names)
+    assert not any(name and ("現" in name or "舊" in name) for name in names)
     nogodan = next(row for row in rows if row.name == "노고단대피소")
     assert nogodan.raw["시설물"] == "現노고단대피소"
 
@@ -95,6 +95,9 @@ async def test_current_official_name_drops_leading_hyeon_marker_but_raw_keeps_it
         ("노고단대피소(現)", "노고단대피소(現)"),
         ("현노고단대피소", "현노고단대피소"),
         ("現", "現"),
+        # 한자어 이름의 첫 글자는 표식이 아니다.
+        ("現代아산휴게소", "現代아산휴게소"),
+        ("舊基里대피소", "舊基里대피소"),
     ],
 )
 async def test_leading_status_marker_is_stripped_only_as_a_prefix(value, expected):
