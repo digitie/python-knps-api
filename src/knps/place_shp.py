@@ -19,7 +19,7 @@ from .artifacts import _decode_zip_member_name
 from .exceptions import KnpsParseError
 from .geometry import _build_transform, _crs_from_prj, _import_pyshp, _stringify
 from .models import FileDataset, KnpsPlaceRecord
-from .records import HeaderIndex, normalize_place_record
+from .records import HeaderIndex, _strip_status_marker, normalize_place_record
 
 # 중첩 ZIP 자체와 그 내용은 각각 누적 계산한다.
 _MAX_DEPTH = 3
@@ -165,7 +165,7 @@ def _apply_shelter_fields(
     index = HeaderIndex(raw, bare_codes=True)
     updates: dict[str, str] = {}
     if record.name is None:
-        name = index.lookup((), _SHELTER_NAME_FIELDS)
+        name = _strip_status_marker(index.lookup((), _SHELTER_NAME_FIELDS))
         if name is not None:
             updates["name"] = name
     if record.road_address is None and record.jibun_address is None:

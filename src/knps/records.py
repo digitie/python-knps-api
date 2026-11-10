@@ -112,6 +112,25 @@ class HeaderIndex:
         return None
 
 
+# 이름 앞의 현행/구 표식(``現``·``舊``, 괄호형 ``(現)``·``（舊）`` 포함). 원천이 같은 시설의
+# 이전 위치와 구분하려고 붙인 메모라 시설 이름이 아니다(python-knps-api#17 후속,
+# 공식 대피소 ``現노고단대피소``). 원문은 ``raw``에 그대로 남는다. 괄호 없는 표식은 뒤에 한글이나
+# 공백이 올 때만 표식이다 — ``現代…``·``舊基里…`` 같은 한자어 이름을 자르지 않는다.
+_STATUS_MARKER = re.compile(r"^\s*(?:[現舊](?=[\s가-힣])|[(（]\s*[現舊]\s*[)）])\s*")
+
+
+def _strip_status_marker(name: str | None) -> str | None:
+    """이름 맨 앞의 ``現``/``舊`` 표식만 걷는다. 걷고 나서 비면 원문을 유지한다."""
+
+    if name is None:
+        return None
+    match = _STATUS_MARKER.match(name)
+    if match is None:
+        return name
+    rest = name[match.end() :]
+    return rest if rest.strip() else name
+
+
 def _maybe_float(value: str | None) -> float | None:
     if value is None:
         return None
@@ -161,7 +180,7 @@ def normalize_place_record(
     return KnpsPlaceRecord(
         dataset_key=dataset_key,
         source_id=_resolve_source_id(index, raw),
-        name=index.lookup(_NAME_CODES, _NAME_KOREAN),
+        name=_strip_status_marker(index.lookup(_NAME_CODES, _NAME_KOREAN)),
         name_en=index.lookup(_NAME_EN_CODES, _NAME_EN_KOREAN),
         longitude=_maybe_float(index.lookup(_LONGITUDE_CODES, _LONGITUDE_KOREAN)),
         latitude=_maybe_float(index.lookup(_LATITUDE_CODES, _LATITUDE_KOREAN)),
@@ -195,7 +214,7 @@ def normalize_geo_record(
     return KnpsGeoRecord(
         dataset_key=dataset_key,
         source_id=_resolve_source_id(index, raw),
-        name=index.lookup(_NAME_CODES, _NAME_KOREAN),
+        name=_strip_status_marker(index.lookup(_NAME_CODES, _NAME_KOREAN)),
         name_en=index.lookup(_NAME_EN_CODES, _NAME_EN_KOREAN),
         geom_wkt=geom_wkt,
         longitude=longitude,

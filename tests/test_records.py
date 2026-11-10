@@ -83,6 +83,27 @@ def test_normalize_standard_point_uses_embedded_codes() -> None:
     assert rec.raw == STANDARD_POINT_ROW
 
 
+def test_normalize_drops_leading_status_marker_from_korean_name_only() -> None:
+    row = {
+        **STANDARD_POINT_ROW,
+        "명칭_한글(KOR_NM)": "現동학사탐방안내소",
+        "명칭_영어(ENG_NM)": "現 Donghaksa",
+    }
+    place = normalize_place_record("knps_visitor_centers", row)
+    geo = normalize_geo_record("knps_visitor_centers", "POINT (127 36)", row)
+
+    assert place.name == "동학사탐방안내소"
+    assert geo.name == "동학사탐방안내소"
+    # 영문 이름과 원문은 손대지 않는다.
+    assert place.name_en == "現 Donghaksa"
+    assert place.raw["명칭_한글(KOR_NM)"] == "現동학사탐방안내소"
+
+    bracketed = {**STANDARD_POINT_ROW, "명칭_한글(KOR_NM)": "（舊） 동학사탐방안내소"}
+    assert normalize_place_record("knps_visitor_centers", bracketed).name == "동학사탐방안내소"
+    hanja = {**STANDARD_POINT_ROW, "명칭_한글(KOR_NM)": "現代탐방안내소"}
+    assert normalize_place_record("knps_visitor_centers", hanja).name == "現代탐방안내소"
+
+
 def test_normalize_weather_station_codes() -> None:
     rec = normalize_place_record("knps_weather_stations", WEATHER_STATION_ROW)
 
