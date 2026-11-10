@@ -75,6 +75,34 @@ async def test_current_official_archive_yields_all_named_shelters():
     assert jangteomok.raw["__knps_source_crs__"] == "EPSG:5186"
 
 
+async def test_current_official_name_drops_leading_hyeon_marker_but_raw_keeps_it():
+    # 원천은 이전 대피소와 구분하려고 '現노고단대피소'로 적었다(python-knps-api#17 후속).
+    rows = await _read(CURRENT.read_bytes())
+    names = {row.name for row in rows}
+    assert "노고단대피소" in names
+    assert not any(name and name[0] in "現舊" for name in names)
+    nogodan = next(row for row in rows if row.name == "노고단대피소")
+    assert nogodan.raw["시설물"] == "現노고단대피소"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("現노고단대피소", "노고단대피소"),
+        ("舊 노고단대피소", "노고단대피소"),
+        ("(現)노고단대피소", "노고단대피소"),
+        ("（舊） 노고단대피소", "노고단대피소"),
+        ("노고단대피소(現)", "노고단대피소(現)"),
+        ("현노고단대피소", "현노고단대피소"),
+        ("現", "現"),
+    ],
+)
+async def test_leading_status_marker_is_stripped_only_as_a_prefix(value, expected):
+    rows = await _read(_zip(_utf8_layer("시설물명".encode(), value)))
+    assert rows[0].name == expected
+    assert rows[0].raw["시설물명"] == value
+
+
 def _current_with_first_point_moved(dx: float) -> bytes:
     with zipfile.ZipFile(CURRENT) as archive:
         entries = {info.filename: archive.read(info) for info in archive.infolist()}
