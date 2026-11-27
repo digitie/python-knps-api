@@ -237,3 +237,74 @@ def test_extract_geometries_propagates_truncated_flag() -> None:
 
     assert collection.truncated is True
     assert len(collection.features) == 1
+
+
+def _build_wdpa_polygon_zip(*, cpg: bytes | None) -> bytes:
+    shapefile = pytest.importorskip("shapefile")
+    shp, dbf, shx = io.BytesIO(), io.BytesIO(), io.BytesIO()
+    writer = shapefile.Writer(shp=shp, dbf=dbf, shx=shx, encoding="utf-8")
+    writer.field("WDPAID", "N", 18, 1)
+    writer.field("ORIG_NAME", "C", 60)
+    writer.poly([[(128.6, 36.0), (128.7, 36.0), (128.7, 36.1), (128.6, 36.1), (128.6, 36.0)]])
+    writer.record(555571373.0, "팔공산")
+    writer.close()
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("wdpa.shp", shp.getvalue())
+        archive.writestr("wdpa.dbf", dbf.getvalue())
+        archive.writestr("wdpa.shx", shx.getvalue())
+        if cpg is not None:
+            archive.writestr("wdpa.cpg", cpg)
+    return buffer.getvalue()
+
+
+def test_extract_geometries_honors_cpg_utf8_declaration() -> None:
+    """``.cpg``가 UTF-8을 선언하면 DBF 한글을 cp949로 깨뜨리지 않는다(한국보호지역 SHP)."""
+
+    pytest.importorskip("shapefile")
+    dataset = file_dataset("knps_protected_areas")
+
+    collection = extract_geometries(dataset, _build_wdpa_polygon_zip(cpg=b"UTF-8"))
+
+    assert collection.features[0].as_dict["ORIG_NAME"] == "팔공산"
+
+
+def test_extract_geometries_without_cpg_keeps_cp949_default() -> None:
+    """``.cpg``가 없으면 종전처럼 cp949로 읽는다 — UTF-8 byte는 한글로 복원되지 않는다."""
+
+    pytest.importorskip("shapefile")
+    dataset = file_dataset("knps_protected_areas")
+
+    collection = extract_geometries(dataset, _build_wdpa_polygon_zip(cpg=None))
+
+    # UTF-8 "팔공산"(9 bytes)을 cp949로 읽은 값 — 종전 동작 그대로다.
+    expected = "팔공산".encode().decode("cp949", errors="replace")
+    assert collection.features[0].as_dict["ORIG_NAME"] == expected
+
+
+@pytest.mark.parametrize(
+    ("declared", "expected"),
+    [
+        (None, "cp949"),
+        (b"", "cp949"),
+        (b"UTF-8", "utf-8"),
+        (b"utf8\r\n", "utf-8"),
+        (b"65001", "utf-8"),
+        (b"ANSI 949", "cp949"),
+        (b"949", "cp949"),
+        (b"EUC-KR", "cp949"),
+        (b"ASCII", "cp949"),
+        (b"\xef\xbb\xbfUTF-8", "utf-8"),
+        (b"not-a-codec", "cp949"),
+        # codecs.lookup이 받는 비텍스트·DBF 부적합 codec은 거부한다.
+        (b"rot13", "cp949"),
+        (b"zlib_codec", "cp949"),
+        (b"utf-16", "cp949"),
+        (b"UTF-8" + b" " * 100, "cp949"),
+    ],
+)
+def test_dbf_encoding_from_cpg(declared: bytes | None, expected: str) -> None:
+    from knps.geometry import _dbf_encoding
+
+    assert _dbf_encoding(declared) == expected

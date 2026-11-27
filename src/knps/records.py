@@ -154,8 +154,53 @@ def _synth_source_id(raw: Mapping[str, str | None]) -> str:
     return f"row:{digest[:16]}"
 
 
-def _resolve_source_id(index: HeaderIndex, raw: Mapping[str, str | None]) -> str:
-    resolved = index.lookup(_SOURCE_ID_CODES, _SOURCE_ID_KOREAN)
+# 한국보호지역(WDPA 형식 SHP, ``knps_protected_areas``)의 전역 식별자. 영문 bare header라
+# ``HeaderIndex``의 코드 색인이 아니라 header 이름 그대로 찾는다. ``WDPA_PID``(구획 id)가
+# ``WDPAID``(보호지역 id)보다 세밀하므로 먼저 본다. DBF 숫자 필드라 ``555571373.0``처럼
+# 오므로 정수 꼴의 ``.0``만 걷는다.
+_WDPA_DATASET_KEY = "knps_protected_areas"
+_WDPA_ID_HEADERS = ("WDPA_PID", "WDPAID")
+_WDPA_NAME_HEADERS = ("ORIG_NAME", "NAME")
+_WDPA_NAME_EN_HEADERS = ("NAME",)
+_INTEGRAL_FLOAT = re.compile(r"^(\d+)\.0+$")
+
+# 국립공원 공원경계 SHP(``knps_park_boundaries``)의 공원 코드·공원명 bare header. 공용
+# normalizer의 후보에 섞지 않는다 — 공원코드는 공원 안 시설마다 같으므로, 다른 dataset에 이
+# 열이 생기면 행들이 한 id로 합쳐진다(대피소·탐방로 vertex 조립).
+_PARK_BOUNDARY_DATASET_KEY = "knps_park_boundaries"
+_PARK_BOUNDARY_ID_HEADERS = ("NPK_CD",)
+_PARK_BOUNDARY_NAME_HEADERS = ("NPK_NM",)
+
+
+def _is_wdpa(dataset_key: str | None, index: HeaderIndex) -> bool:
+    return dataset_key == _WDPA_DATASET_KEY and any(
+        header in index.by_full for header in _WDPA_ID_HEADERS
+    )
+
+
+def _wdpa_source_id(index: HeaderIndex) -> str | None:
+    resolved = index.lookup((), _WDPA_ID_HEADERS)
+    if resolved is None or not resolved.strip():
+        return None
+    text = resolved.strip()
+    match = _INTEGRAL_FLOAT.fullmatch(text)
+    return match.group(1) if match is not None else text
+
+
+def _resolve_source_id(
+    index: HeaderIndex,
+    raw: Mapping[str, str | None],
+    *,
+    dataset_key: str | None = None,
+) -> str:
+    if _is_wdpa(dataset_key, index):
+        wdpa_id = _wdpa_source_id(index)
+        if wdpa_id is not None:
+            return wdpa_id
+    korean: tuple[str, ...] = _SOURCE_ID_KOREAN
+    if dataset_key == _PARK_BOUNDARY_DATASET_KEY:
+        korean = korean + _PARK_BOUNDARY_ID_HEADERS
+    resolved = index.lookup(_SOURCE_ID_CODES, korean)
     if resolved is not None and resolved.strip():
         return resolved.strip()
     return _synth_source_id(raw)
@@ -211,11 +256,20 @@ def normalize_geo_record(
     else:
         longitude = _maybe_float(index.lookup(_LONGITUDE_CODES, _LONGITUDE_KOREAN))
         latitude = _maybe_float(index.lookup(_LATITUDE_CODES, _LATITUDE_KOREAN))
+    if _is_wdpa(dataset_key, index):
+        name = index.lookup((), _WDPA_NAME_HEADERS)
+        name_en = index.lookup((), _WDPA_NAME_EN_HEADERS)
+    elif dataset_key == _PARK_BOUNDARY_DATASET_KEY:
+        name = index.lookup(_NAME_CODES, _NAME_KOREAN + _PARK_BOUNDARY_NAME_HEADERS)
+        name_en = index.lookup(_NAME_EN_CODES, _NAME_EN_KOREAN)
+    else:
+        name = index.lookup(_NAME_CODES, _NAME_KOREAN)
+        name_en = index.lookup(_NAME_EN_CODES, _NAME_EN_KOREAN)
     return KnpsGeoRecord(
         dataset_key=dataset_key,
-        source_id=_resolve_source_id(index, raw),
-        name=_strip_status_marker(index.lookup(_NAME_CODES, _NAME_KOREAN)),
-        name_en=index.lookup(_NAME_EN_CODES, _NAME_EN_KOREAN),
+        source_id=_resolve_source_id(index, raw, dataset_key=dataset_key),
+        name=_strip_status_marker(name),
+        name_en=name_en,
         geom_wkt=geom_wkt,
         longitude=longitude,
         latitude=latitude,

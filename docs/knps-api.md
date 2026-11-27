@@ -30,7 +30,7 @@ KNPS는 현재 이 라이브러리에서 OpenAPI catalog를 제공하지 않는�
 
 | key | 공식 이름 | data.go.kr | format | geometry | feature |
 |-----|-----------|------------|--------|----------|---------|
-| `knps_park_boundaries` | 국립공원공단_국립공원 공원경계_20231231 | `15017313` | SHP | MultiPolygon | area |
+| `knps_park_boundaries` | 국립공원공단_국립공원 공원경계_20231231 | `15017313` | SHP | MultiPolygon | area — **공원경계 3 km 버퍼**(아래 주의) |
 | `knps_trails` | 국립공원공단_국립공원 탐방로 공간데이터_20170928 | `15003467` | CSV | LineString | route |
 | `knps_visitor_centers` | 국립공원공단_국립공원 탐방안내소 공간데이터_20141219 | `15003445` | CSV | Point | place |
 | `knps_hazard_zones` | 국립공원공단_국립공원 위험지역 공간데이터_20180816 | `15003441` | CSV | Polygon | area |
@@ -43,13 +43,21 @@ KNPS는 현재 이 라이브러리에서 OpenAPI catalog를 제공하지 않는�
 | `knps_linear_facilities` | 국립공원공단_국립공원 선형시설_20181231 | `15091972` | CSV | LineString | route |
 | `knps_basic_statistics` | 국립공원공단_국립공원기본통계2020 | `15087598` | CSV | n/a | timeseries |
 | `knps_visitor_statistics` | 국립공원공단_국립공원 탐방객 통계 | `15107577` | CSV/XLSX | n/a | timeseries |
-| `knps_protected_areas` | 국립공원공단_한국보호지역 데이터_20161231 | `15127921` | CSV | Polygon | area |
+| `knps_protected_areas` | 국립공원공단_한국보호지역 데이터_20161231 | `15127921` | CSV+SHP | Polygon | area — 국립공원 22곳의 실제 경계 포함 |
 | `knps_lod_table_catalog` | 국립공원공단_LOD 공간데이터 테이블 목록 | `15118945` | CSV | n/a | metadata |
 
 ## 공간데이터 처리 원칙
 
 - 원본 좌표계는 EPSG:5179 또는 5186일 수 있다. parser는 `source_crs`(또는 shapefile `.prj`)가 확인되면 WGS84로 재투영하고, `GeoFeatureCollection.source_crs`/`crs`에 원본·현재 좌표계를 함께 보존한다. 좌표계를 알 수 없으면 원본 좌표를 그대로 둔다.
-- SHP 한글 인코딩은 CP949 가능성을 기본 고려한다 (`pyshp`에 `encoding="cp949"` 적용).
+- SHP 한글 인코딩은 `.cpg`(DBF code page 선언)가 있으면 그것을 따르고(`UTF-8`·`65001`·`ANSI 949`…),
+  없거나 모르는 값이면 CP949로 읽는다. 한국보호지역 SHP는 `.cpg`로 UTF-8을 선언한다.
+- **`knps_park_boundaries`는 공원 경계가 아니다.** 원본 `BSI_NPK_BBNDR.shp.xml` 처리 이력에
+  `Buffer … "3 Kilometers" FULL ROUND`가 있다 — 공원경계를 3 km 넓힌 면이다(2026-11-27 실측:
+  북한산 240.7 km² vs 공식 76.9, 지리산 977.6 vs 483.0, 경주 659.4 vs 136.6). 실제 경계가 필요하면
+  `knps_protected_areas`의 `DESIG_ENG='National Park'` 22행을 쓴다(2023-12-31 승격한 팔공산은
+  2016 기준이라 `Provincial Park` 행, 124.9 km² vs 공식 125.2).
+- 한국보호지역(WDPA 형식) record의 `source_id`는 `WDPA_PID`(없으면 `WDPAID`, DBF 숫자의 `.0` 제거),
+  `name`은 `ORIG_NAME`, `name_en`은 `NAME`이다. 공원경계 SHP는 `NPK_CD`·`NPK_NM`을 쓴다.
 - ZIP 내부에 CSV와 shapefile이 함께 있으면 record 식별자는 shapefile attribute를 우선하고, CSV는 부가 필드 보강에 사용한다.
 - geometry 추출은 `client.files.extract_geometries(key, data, ...)` 또는 `await client.files.download_geometries(key, ...)`로 호출한다. CSV는 WKT 컬럼 또는 위경도 컬럼을 자동 감지한다.
 - geometry가 없는 통계/media dataset은 feature 본문에 섞지 않고 별도 timeseries/source link로 전달한다.
