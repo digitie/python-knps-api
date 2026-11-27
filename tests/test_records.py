@@ -393,3 +393,32 @@ def test_park_boundary_name_reads_bare_npk_nm() -> None:
 
     assert rec.name == "북한산"
     assert rec.source_id == "L999M001S009"
+
+
+def test_wdpa_name_falls_back_to_english_name_when_orig_name_is_empty() -> None:
+    row = {**WDPA_ROW, "ORIG_NAME": ""}
+
+    rec = normalize_geo_record("knps_protected_areas", "POINT (128 36)", row)
+
+    assert rec.name == "Palgongsan"
+
+
+def test_park_and_wdpa_headers_do_not_leak_into_other_datasets() -> None:
+    """공원코드(NPK_CD)·WDPA id는 그 dataset에서만 id다 — 다른 dataset 행은 행 hash 그대로다.
+
+    공원코드는 같은 공원의 시설마다 같다. 공용 후보에 섞이면 그 열이 생긴 dataset의 행들이
+    한 id로 합쳐진다(대피소 id 충돌, 탐방로 vertex가 공원 하나로 조립).
+    """
+
+    first = {"NPK_CD": "P01", "NPK_NM": "북한산", "WDPAID": "1.0", "x": "1"}
+    second = {**first, "x": "2"}
+
+    geo_ids = {
+        normalize_geo_record("knps_trails", "POINT (127 37)", row).source_id
+        for row in (first, second)
+    }
+    place_ids = {normalize_place_record("knps_shelters", row).source_id for row in (first, second)}
+
+    assert len(geo_ids) == 2 and all(value.startswith("row:") for value in geo_ids)
+    assert len(place_ids) == 2 and all(value.startswith("row:") for value in place_ids)
+    assert normalize_geo_record("knps_trails", "POINT (127 37)", first).name is None

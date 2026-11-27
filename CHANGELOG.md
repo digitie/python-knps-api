@@ -13,7 +13,9 @@
   `ORIG_NAME` 한글 1,516건이 전부 mojibake였다(`replace`로 일부 byte 소실).
 - 한국보호지역 record: `source_id` = `WDPA_PID`(없으면 `WDPAID`, 정수 꼴 `.0` 제거) — 종전엔 행 전체
   hash(`row:…`)라 원천 파일이 바뀌면 같은 보호지역의 id가 바뀌었다. `name` = `ORIG_NAME`,
-  `name_en` = `NAME`. 공원경계 record는 `NPK_CD`·`NPK_NM`을 source_id·name으로 쓴다.
+  `name_en` = `NAME`(`ORIG_NAME`이 비면 `NAME`이 name). 공원경계 record는 `NPK_CD`·`NPK_NM`을
+  source_id·name으로 쓴다. 두 규칙은 해당 dataset key에서만 적용한다 — 공원코드는 공원 안 시설마다
+  같아 공용 후보에 섞으면 다른 dataset 행이 한 id로 합쳐진다.
   **하류 영향:** 두 dataset의 `source_id`가 바뀐다(행 hash → 전역 id).
 
 ### 대피소 SHP

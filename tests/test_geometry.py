@@ -293,7 +293,8 @@ def test_extract_geometries_without_cpg_keeps_cp949_default() -> None:
         (b"65001", "utf-8"),
         (b"ANSI 949", "cp949"),
         (b"949", "cp949"),
-        (b"EUC-KR", "euc_kr"),
+        (b"EUC-KR", "cp949"),
+        (b"ASCII", "cp949"),
         (b"\xef\xbb\xbfUTF-8", "utf-8"),
         (b"not-a-codec", "cp949"),
         # codecs.lookup이 받는 비텍스트·DBF 부적합 codec은 거부한다.

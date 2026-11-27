@@ -503,6 +503,8 @@ def _transform_coordinates(
 
 
 _DEFAULT_DBF_ENCODING = "cp949"
+# EUC-KR·ASCII 선언은 cp949로 읽는다 — 한국 GIS 도구는 ``EUC-KR``이라 적고 cp949(UHC) byte를
+# 쓰는 일이 흔하고, 둘 다 cp949의 부분집합이라 잃는 것이 없다(엄격한 euc_kr은 확장 한글을 버린다).
 # ``.cpg``는 다운로드 파일(신뢰 불가)이다. ``codecs.lookup``은 ``rot13``·``zlib_codec``·``utf-16``
 # 같은 DBF에 맞지 않는 codec도 받으므로 쓰지 않고, 아는 code page만 허용한다.
 _CPG_ENCODINGS: dict[str, str] = {
@@ -513,20 +515,20 @@ _CPG_ENCODINGS: dict[str, str] = {
     "949": "cp949",
     "ms949": "cp949",
     "uhc": "cp949",
-    "euc-kr": "euc_kr",
-    "euc_kr": "euc_kr",
-    "euckr": "euc_kr",
+    "euc-kr": "cp949",
+    "euc_kr": "cp949",
+    "euckr": "cp949",
     "ks_c_5601-1987": "cp949",
-    "51949": "euc_kr",
+    "51949": "cp949",
     "cp1252": "cp1252",
     "1252": "cp1252",
     "iso-8859-1": "latin-1",
     "iso8859-1": "latin-1",
     "latin1": "latin-1",
     "28591": "latin-1",
-    "ascii": "ascii",
-    "us-ascii": "ascii",
-    "20127": "ascii",
+    "ascii": "cp949",
+    "us-ascii": "cp949",
+    "20127": "cp949",
 }
 _MAX_CPG_BYTES = 64
 
