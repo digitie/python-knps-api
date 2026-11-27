@@ -7,6 +7,7 @@ WKT/위경도 컬럼만 쓰는 CSV 추출은 재투영이 필요 없으면 선�
 
 from __future__ import annotations
 
+import codecs
 import csv
 import io
 import re
@@ -181,9 +182,10 @@ def _extract_from_shapefile(
 
     resolved_source = source_crs or _crs_from_prj(prj_bytes)
 
+    cpg_io = _sibling(".cpg")
     reader_kwargs: dict[str, object] = {
         "shp": io.BytesIO(archive.read(names[shp_name])),
-        "encoding": "cp949",
+        "encoding": _dbf_encoding(None if cpg_io is None else cpg_io.getvalue()),
         "encodingErrors": "replace",
     }
     dbf_io = _sibling(".dbf")
@@ -499,6 +501,34 @@ def _transform_coordinates(
     if isinstance(node, tuple):
         return tuple(_transform_coordinates(child, transform) for child in node)
     return node
+
+
+_DEFAULT_DBF_ENCODING = "cp949"
+
+
+def _dbf_encoding(cpg_bytes: bytes | None) -> str:
+    """``.cpg``(DBF code page 선언)가 가리키는 Python codec. 없거나 모르면 cp949.
+
+    KNPS 자체 SHP는 대개 ``.cpg`` 없이 cp949다. 한국보호지역(WDPA 형식) SHP처럼
+    ``.cpg``로 ``UTF-8``을 선언한 파일을 cp949로 읽으면 한글 이름이 전부 mojibake가
+    되고 ``replace``로 일부 byte가 영구히 사라진다(2026-11-27 실측, ``ORIG_NAME``).
+    """
+
+    if not cpg_bytes:
+        return _DEFAULT_DBF_ENCODING
+    declared = cpg_bytes.decode("ascii", errors="ignore").strip()
+    if not declared:
+        return _DEFAULT_DBF_ENCODING
+    # ESRI는 ``65001``(UTF-8 code page)이나 ``ANSI 949`` 같은 표기도 쓴다.
+    lowered = declared.lower().removeprefix("ansi").strip()
+    if lowered == "65001":
+        return "utf-8"
+    if lowered.isdigit():
+        lowered = f"cp{lowered}"
+    try:
+        return codecs.lookup(lowered).name
+    except LookupError:
+        return _DEFAULT_DBF_ENCODING
 
 
 def _crs_from_prj(prj_bytes: bytes | None) -> str | None:

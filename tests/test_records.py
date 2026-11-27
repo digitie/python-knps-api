@@ -345,3 +345,51 @@ def test_assemble_line_records_skips_single_vertex_and_passes_through_lines() ->
 
     assert [r.source_id for r in assembled] == ["C"]
     assert assembled[0].geom_wkt == "LINESTRING (127.0 36.0, 127.1 36.1)"
+
+
+# --- 한국보호지역(WDPA 형식 SHP) ------------------------------------------------
+
+WDPA_ROW = {
+    "WDPAID": "555571373.0",
+    "WDPA_PID": "555571373.0",
+    "NAME": "Palgongsan",
+    "ORIG_NAME": "팔공산",
+    "DESIG_ENG": "Provincial Park",
+    "MARINE": "0",
+}
+
+
+def test_normalize_wdpa_record_uses_wdpa_pid_and_korean_orig_name() -> None:
+    rec = normalize_geo_record(
+        "knps_protected_areas", "POLYGON ((128 36, 129 36, 129 37, 128 36))", WDPA_ROW
+    )
+
+    # 행 hash가 아니라 전역 보호지역 id — 원천 파일이 바뀌어도 같은 보호지역은 같은 id다.
+    assert rec.source_id == "555571373"
+    assert rec.name == "팔공산"
+    assert rec.name_en == "Palgongsan"
+
+
+def test_wdpa_source_id_prefers_parcel_id_and_keeps_non_integral_text() -> None:
+    row = {**WDPA_ROW, "WDPA_PID": "555571373_A"}
+
+    rec = normalize_geo_record("knps_protected_areas", "POINT (128 36)", row)
+
+    assert rec.source_id == "555571373_A"
+
+
+def test_wdpa_source_id_falls_back_to_wdpaid() -> None:
+    row = {key: value for key, value in WDPA_ROW.items() if key != "WDPA_PID"}
+
+    rec = normalize_geo_record("knps_protected_areas", "POINT (128 36)", row)
+
+    assert rec.source_id == "555571373"
+
+
+def test_park_boundary_name_reads_bare_npk_nm() -> None:
+    row = {"NPK_CD": "L999M001S009", "NPK_NM": "북한산", "CRT_YMD": "20241230"}
+
+    rec = normalize_geo_record("knps_park_boundaries", "POINT (127 37.6)", row)
+
+    assert rec.name == "북한산"
+    assert rec.source_id == "L999M001S009"

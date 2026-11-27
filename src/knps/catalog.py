@@ -208,7 +208,12 @@ FILE_DATASETS: tuple[FileDataset, ...] = (
         categories=("park", "spatial"),
         formats=("SHP",),
         detail_url=f"{DATA_GO_BASE}/15017313/fileData.do",
-        description="국립공원 경계 polygon 공간데이터.",
+        description=(
+            "국립공원 공원경계 **3 km 버퍼** polygon(BSI_NPK_BBNDR, 23개 공원). 공원 경계 자체가 "
+            "아니다 — 원본 메타데이터의 처리 이력이 `Buffer ... \"3 Kilometers\" FULL ROUND`다"
+            "(북한산 240.7 km² vs 공식 76.9 km²). 실제 공원 경계는 `knps_protected_areas`의 "
+            "`DESIG_ENG='National Park'` 행이다."
+        ),
         direct_download=True,
         download_url=_download_url("FILE_000000003536231"),
         geometry_type="MultiPolygon",
@@ -388,9 +393,15 @@ FILE_DATASETS: tuple[FileDataset, ...] = (
         title="국립공원공단_한국보호지역 데이터_20161231",
         data_go_id="15127921",
         categories=("park", "spatial"),
-        formats=("CSV",),
+        formats=("CSV", "SHP"),
         detail_url=f"{DATA_GO_BASE}/15127921/fileData.do",
-        description="한국보호지역 데이터.",
+        description=(
+            "한국보호지역 데이터(WDPA 형식 SHP + 속성 CSV, 1,516 polygon). geometry는 ZIP 안 SHP"
+            "(EPSG:4326, UTF-8 `.cpg`)에서 읽고, `WDPA_PID`를 source_id·"
+            "`ORIG_NAME`을 이름으로 쓴다. "
+            "국립공원 22곳(`DESIG_ENG='National Park'`)의 실제 경계를 담는다 — 2023-12-31 승격한 "
+            "팔공산은 2016 기준이라 `Provincial Park`로 실려 있다."
+        ),
         direct_download=True,
         download_url=_download_url("FILE_000000002908040"),
         geometry_type="Polygon",

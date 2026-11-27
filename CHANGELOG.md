@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 공원경계·한국보호지역 SHP (2026-11-27)
+
+- `knps_park_boundaries`(15017313)가 공원경계가 아니라 **3 km 버퍼**임을 카탈로그 설명에 적었다
+  (원본 메타데이터 `Buffer "3 Kilometers"`, 북한산 240.7 km² vs 공식 76.9). 실제 경계는
+  `knps_protected_areas`의 `National Park` 행이다.
+- SHP DBF 인코딩을 `.cpg` 선언에서 읽는다(없으면 종전대로 cp949). 한국보호지역 SHP는 UTF-8이라
+  `ORIG_NAME` 한글 1,516건이 전부 mojibake였다(`replace`로 일부 byte 소실).
+- 한국보호지역 record: `source_id` = `WDPA_PID`(없으면 `WDPAID`, 정수 꼴 `.0` 제거) — 종전엔 행 전체
+  hash(`row:…`)라 원천 파일이 바뀌면 같은 보호지역의 id가 바뀌었다. `name` = `ORIG_NAME`,
+  `name_en` = `NAME`. 공원경계 record는 `NPK_CD`·`NPK_NM`을 source_id·name으로 쓴다.
+  **하류 영향:** 두 dataset의 `source_id`가 바뀐다(행 hash → 전역 id).
+
 ### 대피소 SHP
 
 - 대피소의 중첩 ZIP에서 실제 Point 레이어만 typed place record로 읽는다.
