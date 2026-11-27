@@ -278,7 +278,9 @@ def test_extract_geometries_without_cpg_keeps_cp949_default() -> None:
 
     collection = extract_geometries(dataset, _build_wdpa_polygon_zip(cpg=None))
 
-    assert collection.features[0].as_dict["ORIG_NAME"] != "팔공산"
+    # UTF-8 "팔공산"(9 bytes)을 cp949로 읽은 값 — 종전 동작 그대로다.
+    expected = "팔공산".encode().decode("cp949", errors="replace")
+    assert collection.features[0].as_dict["ORIG_NAME"] == expected
 
 
 @pytest.mark.parametrize(
@@ -292,7 +294,13 @@ def test_extract_geometries_without_cpg_keeps_cp949_default() -> None:
         (b"ANSI 949", "cp949"),
         (b"949", "cp949"),
         (b"EUC-KR", "euc_kr"),
+        (b"\xef\xbb\xbfUTF-8", "utf-8"),
         (b"not-a-codec", "cp949"),
+        # codecs.lookup이 받는 비텍스트·DBF 부적합 codec은 거부한다.
+        (b"rot13", "cp949"),
+        (b"zlib_codec", "cp949"),
+        (b"utf-16", "cp949"),
+        (b"UTF-8" + b" " * 100, "cp949"),
     ],
 )
 def test_dbf_encoding_from_cpg(declared: bytes | None, expected: str) -> None:

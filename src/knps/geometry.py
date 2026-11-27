@@ -7,7 +7,6 @@ WKT/위경도 컬럼만 쓰는 CSV 추출은 재투영이 필요 없으면 선�
 
 from __future__ import annotations
 
-import codecs
 import csv
 import io
 import re
@@ -504,6 +503,32 @@ def _transform_coordinates(
 
 
 _DEFAULT_DBF_ENCODING = "cp949"
+# ``.cpg``는 다운로드 파일(신뢰 불가)이다. ``codecs.lookup``은 ``rot13``·``zlib_codec``·``utf-16``
+# 같은 DBF에 맞지 않는 codec도 받으므로 쓰지 않고, 아는 code page만 허용한다.
+_CPG_ENCODINGS: dict[str, str] = {
+    "utf-8": "utf-8",
+    "utf8": "utf-8",
+    "65001": "utf-8",
+    "cp949": "cp949",
+    "949": "cp949",
+    "ms949": "cp949",
+    "uhc": "cp949",
+    "euc-kr": "euc_kr",
+    "euc_kr": "euc_kr",
+    "euckr": "euc_kr",
+    "ks_c_5601-1987": "cp949",
+    "51949": "euc_kr",
+    "cp1252": "cp1252",
+    "1252": "cp1252",
+    "iso-8859-1": "latin-1",
+    "iso8859-1": "latin-1",
+    "latin1": "latin-1",
+    "28591": "latin-1",
+    "ascii": "ascii",
+    "us-ascii": "ascii",
+    "20127": "ascii",
+}
+_MAX_CPG_BYTES = 64
 
 
 def _dbf_encoding(cpg_bytes: bytes | None) -> str:
@@ -514,21 +539,14 @@ def _dbf_encoding(cpg_bytes: bytes | None) -> str:
     되고 ``replace``로 일부 byte가 영구히 사라진다(2026-11-27 실측, ``ORIG_NAME``).
     """
 
-    if not cpg_bytes:
+    if not cpg_bytes or len(cpg_bytes) > _MAX_CPG_BYTES:
         return _DEFAULT_DBF_ENCODING
-    declared = cpg_bytes.decode("ascii", errors="ignore").strip()
-    if not declared:
-        return _DEFAULT_DBF_ENCODING
-    # ESRI는 ``65001``(UTF-8 code page)이나 ``ANSI 949`` 같은 표기도 쓴다.
-    lowered = declared.lower().removeprefix("ansi").strip()
-    if lowered == "65001":
-        return "utf-8"
-    if lowered.isdigit():
-        lowered = f"cp{lowered}"
-    try:
-        return codecs.lookup(lowered).name
-    except LookupError:
-        return _DEFAULT_DBF_ENCODING
+    declared = cpg_bytes.decode("ascii", errors="ignore").strip().lower()
+    # ESRI는 ``ANSI 949``·``OEM 949`` 같은 표기도 쓴다.
+    for prefix in ("ansi", "oem"):
+        if declared.startswith(prefix):
+            declared = declared[len(prefix) :].strip()
+    return _CPG_ENCODINGS.get(declared, _DEFAULT_DBF_ENCODING)
 
 
 def _crs_from_prj(prj_bytes: bytes | None) -> str | None:
